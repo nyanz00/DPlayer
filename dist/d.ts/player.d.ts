@@ -55,6 +55,8 @@ declare class DPlayer {
      * @constructor
      */
     constructor(options: DPlayerType.Options);
+    setTheme(theme: string, liveColor?: string): void;
+    private applyTheme;
     /**
      * Seek video
      */

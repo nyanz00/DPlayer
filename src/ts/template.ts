@@ -112,6 +112,8 @@ class Template {
             tran: this.tran,
             icons: Icons,
             mobile: utils.isMobile,
+            customControlsLeft: this.options.customControls.filter((control) => control.position === 'left'),
+            customControlsRight: this.options.customControls.filter((control) => control.position !== 'left'),
             video: {
                 current: true,
                 pic: this.options.video.pic,

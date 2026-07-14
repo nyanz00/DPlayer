@@ -12,7 +12,7 @@ export type VideoType = 'auto' | 'hls' | 'mpegts' | 'flv' | 'dash' | 'webtorrent
 export type SubtitleType = 'webvtt' | 'aribb24';
 export type Events = VideoEvents | PlayerEvents;
 export type VideoEvents = 'abort' | 'canplay' | 'canplaythrough' | 'durationchange' | 'emptied' | 'ended' | 'error' | 'loadeddata' | 'loadedmetadata' | 'loadstart' | 'mozaudioavailable' | 'pause' | 'play' | 'playing' | 'progress' | 'ratechange' | 'seeked' | 'seeking' | 'stalled' | 'suspend' | 'timeupdate' | 'volumechange' | 'waiting';
-export type PlayerEvents = 'screenshot' | 'thumbnails_show' | 'thumbnails_hide' | 'danmaku_show' | 'danmaku_hide' | 'danmaku_clear' | 'danmaku_load_start' | 'danmaku_load_end' | 'danmaku_send' | 'danmaku_opacity' | 'contextmenu_show' | 'contextmenu_hide' | 'notice_show' | 'notice_hide' | 'quality_start' | 'quality_end' | 'destroy' | 'resize' | 'fullscreen' | 'fullscreen_cancel' | 'webfullscreen' | 'webfullscreen_cancel' | 'subtitle_show' | 'subtitle_hide' | 'subtitle_change';
+export type PlayerEvents = 'screenshot' | 'thumbnails_show' | 'thumbnails_hide' | 'danmaku_show' | 'danmaku_hide' | 'danmaku_clear' | 'danmaku_load_start' | 'danmaku_load_end' | 'danmaku_send' | 'danmaku_opacity' | 'contextmenu_show' | 'contextmenu_hide' | 'notice_show' | 'notice_hide' | 'quality_start' | 'quality_end' | 'destroy' | 'resize' | 'fullscreen' | 'fullscreen_cancel' | 'webfullscreen' | 'webfullscreen_cancel' | 'subtitle_show' | 'subtitle_hide' | 'subtitle_change' | 'controller_show' | 'controller_hide' | 'theme_change';
 export type DanmakuType = 'top' | 'right' | 'bottom';
 export type DanmakuSize = 'big' | 'medium' | 'small';
 export type FullscreenType = 'browser' | 'web';
@@ -47,6 +47,16 @@ export interface Options {
      * @default '#b7daff'
      */
     theme?: string;
+    /**
+     * @description live indicator color, independent from the player theme
+     * @default theme
+     */
+    liveColor?: string;
+    /**
+     * @description controller auto-hide delay in milliseconds
+     * @default 3000
+     */
+    controllerAutoHideTime?: number;
     /**
      * @description enable video loop
      * @default false
@@ -140,6 +150,18 @@ export interface Options {
      * @description plugin options
      */
     pluginOptions?: PluginOptions;
+    /**
+     * @description custom controller buttons
+     * @default []
+     */
+    customControls?: CustomControl[];
+}
+export interface CustomControl {
+    name: string;
+    ariaLabel: string;
+    icon: string;
+    position?: 'left' | 'right';
+    click: (player: DPlayer) => void;
 }
 export interface APIBackend {
     /**
@@ -367,6 +389,8 @@ export interface OptionsInternal {
     syncWhenPlayingLive: boolean;
     autoplay: boolean;
     theme: string;
+    liveColor: string;
+    controllerAutoHideTime: number;
     loop: boolean;
     lang: Lang | string;
     screenshot: boolean;
@@ -386,6 +410,7 @@ export interface OptionsInternal {
     highlight?: HighlightItem[];
     mutex: boolean;
     pluginOptions: PluginOptions;
+    customControls: CustomControl[];
 }
 export interface VideoInternal {
     quality?: VideoQualityInternal[];

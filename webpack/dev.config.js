@@ -60,6 +60,8 @@ module.exports = {
     // resolve modules
     resolve: {
         extensions: ['.ts', '.js', '.scss'],
+        // art-template-loader emits Windows relative requests with backslashes.
+        preferRelative: true,
     },
 
     // loader settings

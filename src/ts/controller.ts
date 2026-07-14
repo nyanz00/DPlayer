@@ -43,6 +43,7 @@ class Controller {
         if (!utils.isMobile) {
             this.initVolumeButton();
         }
+        this.initCustomControls();
     }
 
     initPlayButton(): void {
@@ -430,7 +431,21 @@ class Controller {
         }
     }
 
-    setAutoHide(time = 3000): void {
+    initCustomControls(): void {
+        const buttons = this.player.container.querySelectorAll<HTMLElement>('[data-dplayer-custom-control]');
+        buttons.forEach((button) => {
+            const name = button.dataset.dplayerCustomControl;
+            const control = this.player.options.customControls.find((item) => item.name === name);
+            if (!control) return;
+            button.addEventListener('click', (event) => {
+                event.stopPropagation();
+                control.click(this.player);
+                this.setAutoHide();
+            });
+        });
+    }
+
+    setAutoHide(time = this.player.options.controllerAutoHideTime): void {
         this.show();
         window.clearTimeout(this.autoHideTimer);
         this.autoHideTimer = window.setTimeout(() => {
@@ -441,13 +456,17 @@ class Controller {
     }
 
     show(): void {
+        if (this.isShow()) return;
         this.player.container.classList.remove('dplayer-hide-controller');
+        this.player.events.trigger('controller_show');
     }
 
     hide() : void{
+        if (!this.isShow()) return;
         this.player.container.classList.add('dplayer-hide-controller');
         this.player.setting.hide();
         this.player.comment && this.player.comment.hide();
+        this.player.events.trigger('controller_hide');
     }
 
     isShow(): boolean {

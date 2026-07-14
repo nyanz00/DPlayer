@@ -21,6 +21,7 @@ declare class Controller {
     initScreenshotButton(): void;
     initAirplayButton(): void;
     initSubtitleButton(): void;
+    initCustomControls(): void;
     setAutoHide(time?: number): void;
     show(): void;
     hide(): void;

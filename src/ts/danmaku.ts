@@ -232,8 +232,8 @@ class Danmaku {
             const ratioRate = 1.25; // magic!
             let ratio = this.container.offsetWidth / 1024 * ratioRate;
             if (ratio >= 1) ratio = 1; // ratio should not exceed 1
-            let itemFontSize = this.options.fontSize * ratio;
-            const itemHeight = itemFontSize + (6 * ratio); // 6 is the vertical margin of danmaku
+            const baseItemFontSize = this.options.fontSize * ratio;
+            const itemHeight = baseItemFontSize + (6 * ratio); // 6 is the vertical margin of danmaku
 
             const danWidth = this.container.offsetWidth;
             const danHeight = this.container.offsetHeight;
@@ -310,17 +310,10 @@ class Danmaku {
                     dan.size = 'medium';
                 }
 
-                // set danmaku size
-                // used to calculate danmaku width
-                // danmaku size doesn't affect itemHeight
-                switch (dan.size) {
-                    case 'big':
-                        itemFontSize = itemFontSize * 1.25;
-                        break;
-                    case 'small':
-                        itemFontSize = itemFontSize * 0.8;
-                        break;
-                }
+                // Keep the font size on each item. The previous container-wide CSS variable
+                // resized every in-flight comment whenever a new big/small comment arrived.
+                // Danmaku size intentionally does not affect tunnel height.
+                const itemFontSize = baseItemFontSize * (dan.size === 'big' ? 1.25 : dan.size === 'small' ? 0.8 : 1);
 
                 const itemWidth = (() => {
                     let measure = 0;
@@ -343,6 +336,7 @@ class Danmaku {
                     danmakuItem.classList.add('dplayer-danmaku-item');
                     danmakuItem.classList.add(`dplayer-danmaku-${dan.type}`); // set danmaku type (CSS)
                     danmakuItem.classList.add(`dplayer-danmaku-size-${dan.size}`); // set danmaku size (CSS)
+                    danmakuItem.style.fontSize = `${itemFontSize}px`;
 
                     // set danmaku color
                     danmakuItem.style.color = dan.color;
@@ -415,9 +409,6 @@ class Danmaku {
                 }
             }
 
-            // set base danmaku font size
-            this.container.style.setProperty('--dplayer-danmaku-font-size', `${itemFontSize}px`);
-
             // draw danmaku
             this.container.appendChild(docFragment);
             return docFragment;
@@ -474,11 +465,9 @@ class Danmaku {
     }
 
     resize(): void {
-        const danWidth = this.container.offsetWidth;
-        const items = this.container.querySelectorAll<HTMLElement>('.dplayer-danmaku-item');
-        for (let i = 0; i < items.length; i++) {
-            items[i].style.transform = `translateX(-${danWidth}px)`;
-        }
+        // Do not retarget an animation that is already in flight. Rewriting its
+        // translateX destination produces a visible horizontal jump. New comments
+        // always capture the current container width in draw().
     }
 
     hide(): void {

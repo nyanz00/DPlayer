@@ -15,7 +15,7 @@
     .dplayer-danmaku-item {
         display: inline-block;
         font-weight: bold;
-        font-size: var(--dplayer-danmaku-font-size);
+        font-size: 29px;
         opacity: var(--dplayer-danmaku-opacity);
         white-space: nowrap;
         text-shadow: 1.2px 1.2px 4px rgba(0, 0, 0, 0.9);
@@ -30,12 +30,6 @@
         span {
             box-decoration-break: clone;
             -webkit-box-decoration-break: clone;
-        }
-        &.dplayer-danmaku-size-big {
-            font-size: calc(var(--dplayer-danmaku-font-size) * 1.25);
-        }
-        &.dplayer-danmaku-size-small {
-            font-size: calc(var(--dplayer-danmaku-font-size) * 0.8);
         }
     }
     .dplayer-danmaku-right {

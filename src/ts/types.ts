@@ -63,7 +63,10 @@ export type PlayerEvents =
     'webfullscreen_cancel' |
     'subtitle_show' |
     'subtitle_hide' |
-    'subtitle_change';
+    'subtitle_change' |
+    'controller_show' |
+    'controller_hide' |
+    'theme_change';
 
 export type DanmakuType = 'top' | 'right' | 'bottom';
 export type DanmakuSize = 'big' | 'medium' | 'small';
@@ -105,6 +108,18 @@ export interface Options {
      * @default '#b7daff'
      */
     theme?: string,
+
+    /**
+     * @description live indicator color, independent from the player theme
+     * @default theme
+     */
+    liveColor?: string,
+
+    /**
+     * @description controller auto-hide delay in milliseconds
+     * @default 3000
+     */
+    controllerAutoHideTime?: number,
 
     /**
      * @description enable video loop
@@ -217,6 +232,20 @@ export interface Options {
      * @description plugin options
      */
     pluginOptions?: PluginOptions,
+
+    /**
+     * @description custom controller buttons
+     * @default []
+     */
+    customControls?: CustomControl[],
+}
+
+export interface CustomControl {
+    name: string;
+    ariaLabel: string;
+    icon: string;
+    position?: 'left' | 'right';
+    click: (player: DPlayer) => void;
 }
 
 export interface APIBackend {
@@ -476,6 +505,8 @@ export interface OptionsInternal {
     syncWhenPlayingLive: boolean,
     autoplay: boolean,
     theme: string,
+    liveColor: string,
+    controllerAutoHideTime: number,
     loop: boolean,
     lang: Lang | string,
     screenshot: boolean,
@@ -495,6 +526,7 @@ export interface OptionsInternal {
     highlight?: HighlightItem[],
     mutex: boolean,
     pluginOptions: PluginOptions,
+    customControls: CustomControl[],
 }
 
 export interface VideoInternal {

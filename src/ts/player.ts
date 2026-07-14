@@ -84,6 +84,7 @@ class DPlayer {
         this.container = this.options.container;
 
         this.container.classList.add('dplayer');
+        this.applyTheme(this.options.theme, this.options.liveColor);
         if (this.options.live) {
             this.container.classList.add('dplayer-live');
         } else {
@@ -162,6 +163,18 @@ class DPlayer {
 
         index++;
         instances.push(this);
+    }
+
+    setTheme(theme: string, liveColor = this.options.liveColor): void {
+        this.options.theme = theme;
+        this.options.liveColor = liveColor;
+        this.applyTheme(theme, liveColor);
+        this.events.trigger('theme_change', { theme, liveColor });
+    }
+
+    private applyTheme(theme: string, liveColor: string): void {
+        this.container.style.setProperty('--dplayer-theme-color', theme);
+        this.container.style.setProperty('--dplayer-live-color', liveColor);
     }
 
     /**

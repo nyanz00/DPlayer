@@ -12,6 +12,8 @@ export default (options: DPlayerType.Options): DPlayerType.OptionsInternal => {
         syncWhenPlayingLive: true,
         autoplay: false,
         theme: '#b7daff',
+        liveColor: options.liveColor || options.theme || '#b7daff',
+        controllerAutoHideTime: 3000,
         loop: false,
         lang: navigator.language.toLowerCase(),
         screenshot: false,
@@ -27,6 +29,7 @@ export default (options: DPlayerType.Options): DPlayerType.OptionsInternal => {
         contextmenu: [],
         mutex: true,
         pluginOptions: {},
+        customControls: [],
     };
     for (const defaultKey in defaultOption) {
         if (Object.prototype.hasOwnProperty.call(defaultOption, defaultKey) && !Object.prototype.hasOwnProperty.call(options, defaultKey)) {
@@ -118,6 +121,8 @@ export default (options: DPlayerType.Options): DPlayerType.OptionsInternal => {
         syncWhenPlayingLive: options.syncWhenPlayingLive!,
         autoplay: options.autoplay!,
         theme: options.theme!,
+        liveColor: options.liveColor!,
+        controllerAutoHideTime: Math.max(0, options.controllerAutoHideTime!),
         loop: options.loop!,
         lang: options.lang!,
         screenshot: options.screenshot!,
@@ -137,6 +142,7 @@ export default (options: DPlayerType.Options): DPlayerType.OptionsInternal => {
         highlight: options.highlight,  // optional
         mutex: options.mutex!,
         pluginOptions: options.pluginOptions!,
+        customControls: options.customControls!,
     };
 
     return optionsInternal;
