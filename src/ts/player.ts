@@ -93,6 +93,9 @@ class DPlayer {
         if (utils.isMobile) {
             this.container.classList.add('dplayer-mobile');
         }
+        if (this.options.volumeBarAlwaysVisible && !utils.isMobile) {
+            this.container.classList.add('dplayer-volume-bar-always-visible');
+        }
         this.narrow = this.container.offsetWidth <= 500;
         if (this.narrow) {
             this.container.classList.add('dplayer-narrow');

@@ -122,6 +122,18 @@ export interface Options {
     controllerAutoHideTime?: number,
 
     /**
+     * @description receive the effective controller visibility directly
+     * @default undefined
+     */
+    controllerVisibilityCallback?: (visible: boolean) => void,
+
+    /**
+     * @description keep the desktop volume slider expanded
+     * @default false
+     */
+    volumeBarAlwaysVisible?: boolean,
+
+    /**
      * @description enable video loop
      * @default false
      */
@@ -507,6 +519,8 @@ export interface OptionsInternal {
     theme: string,
     liveColor: string,
     controllerAutoHideTime: number,
+    controllerVisibilityCallback?: (visible: boolean) => void,
+    volumeBarAlwaysVisible: boolean,
     loop: boolean,
     lang: Lang | string,
     screenshot: boolean,

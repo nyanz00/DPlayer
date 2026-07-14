@@ -30,14 +30,21 @@ interface DanmakuOptionsAPI {
     user?: string,
 }
 
+interface DanmakuTunnelItem {
+    element: HTMLElement,
+    width: number,
+    startedAt: number,
+    duration: number,
+}
+
 class Danmaku {
     options: DanmakuOptions;
     player: DPlayer;
     container: HTMLElement;
     danTunnel: {
-        right: {[key: string]: HTMLElement[]},
-        top: {[key: string]: HTMLElement[]},
-        bottom: {[key: string]: HTMLElement[]},
+        right: {[key: string]: DanmakuTunnelItem[]},
+        top: {[key: string]: DanmakuTunnelItem[]},
+        bottom: {[key: string]: DanmakuTunnelItem[]},
     };
     danIndex: number;
     danFontSize: number;
@@ -49,6 +56,8 @@ class Danmaku {
     context: CanvasRenderingContext2D | null = null;
     showing: boolean;
     paused = false;
+    containerWidth: number;
+    containerHeight: number;
 
     constructor(options: DanmakuOptions) {
         this.options = options;
@@ -66,6 +75,8 @@ class Danmaku {
         this._opacity = this.options.opacity;
         this.events = this.options.events;
         this.unlimited = this.options.unlimited === 1;
+        this.containerWidth = this.container.clientWidth;
+        this.containerHeight = this.container.clientHeight;
         this._measure('', 0);
 
         this.load();
@@ -230,53 +241,62 @@ class Danmaku {
 
             // adjust the font size according to the screen size
             const ratioRate = 1.25; // magic!
-            let ratio = this.container.offsetWidth / 1024 * ratioRate;
+            let ratio = this.containerWidth / 1024 * ratioRate;
             if (ratio >= 1) ratio = 1; // ratio should not exceed 1
             const baseItemFontSize = this.options.fontSize * ratio;
             const itemHeight = baseItemFontSize + (6 * ratio); // 6 is the vertical margin of danmaku
 
-            const danWidth = this.container.offsetWidth;
-            const danHeight = this.container.offsetHeight;
-            const itemY = danHeight / itemHeight;
+            const danWidth = this.containerWidth;
+            const danHeight = this.containerHeight;
+            const laneCount = Math.max(1, Math.floor(danHeight / itemHeight));
 
-            const danItemRight = (danmakuItem: HTMLElement) => {
-                const danmakuItemWidth = danmakuItem.offsetWidth || parseInt(danmakuItem.style.width);
-                const danmakuItemRight =
-                    danmakuItem.getBoundingClientRect().right || this.container.getBoundingClientRect().right + danmakuItemWidth;
-                return this.container.getBoundingClientRect().right - danmakuItemRight;
+            // Keep the moving-comment collision calculation entirely numeric. Reading
+            // getBoundingClientRect() here forced a synchronous layout for every active
+            // comment whenever a new comment arrived, which visibly disturbed animations.
+            const canShareRightLane = (previous: DanmakuTunnelItem, width: number, duration: number, now: number) => {
+                const elapsed = Math.max(0, now - previous.startedAt);
+                if (elapsed >= previous.duration) return true;
+
+                const progress = elapsed / previous.duration;
+                const previousRight = (danWidth + previous.width) * (1 - progress);
+                const gap = danWidth - previousRight;
+                const minimumGap = 10;
+                if (gap < minimumGap) return false;
+
+                const previousSpeed = (danWidth + previous.width) / previous.duration;
+                const nextSpeed = (danWidth + width) / duration;
+                if (nextSpeed <= previousSpeed) return true;
+
+                const remaining = previous.duration - elapsed;
+                const catchUpTime = (gap - minimumGap) / (nextSpeed - previousSpeed);
+                return catchUpTime >= remaining;
             };
 
-            const danSpeed = (width: number) => (danWidth + width) / 5;
+            const getTunnel = (danmakuItem: HTMLElement, type: DPlayerType.DanmakuType, width: number, duration: number) => {
+                const now = performance.now();
+                const tunnelItem: DanmakuTunnelItem = { element: danmakuItem, width, startedAt: now, duration };
 
-            const getTunnel = (danmakuItem: HTMLElement, type: DPlayerType.DanmakuType, width: number) => {
-                const tmp = danWidth / danSpeed(width);
-
-                for (let i = 0; this.unlimited || i < itemY; i++) {
-                    const item = this.danTunnel[type][i + ''];
-                    if (item && item.length) {
+                for (let i = 0; this.unlimited || i < laneCount; i++) {
+                    const lane = this.danTunnel[type][i + ''];
+                    if (lane && lane.length) {
                         if (type !== 'right') {
                             continue;
                         }
-                        for (let j = 0; j < item.length; j++) {
-                            const danRight = danItemRight(item[j]) - 10;
-                            if (danRight <= danWidth - tmp * danSpeed(parseInt(item[j].style.width)) || danRight <= 0) {
-                                break;
-                            }
-                            if (j === item.length - 1) {
-                                this.danTunnel[type][i + ''].push(danmakuItem);
-                                danmakuItem.addEventListener('animationend', () => {
-                                    this.danTunnel[type][i + ''].splice(0, 1);
-                                });
-                                return i % itemY;
-                            }
+                        const previous = lane[lane.length - 1];
+                        if (!canShareRightLane(previous, width, duration, now)) {
+                            continue;
                         }
+                        lane.push(tunnelItem);
                     } else {
-                        this.danTunnel[type][i + ''] = [danmakuItem];
-                        danmakuItem.addEventListener('animationend', () => {
-                            this.danTunnel[type][i + ''].splice(0, 1);
-                        });
-                        return i % itemY;
+                        this.danTunnel[type][i + ''] = [tunnelItem];
                     }
+                    danmakuItem.addEventListener('animationend', () => {
+                        const currentLane = this.danTunnel[type][i + ''];
+                        if (!currentLane) return;
+                        const index = currentLane.findIndex(item => item.element === danmakuItem);
+                        if (index >= 0) currentLane.splice(index, 1);
+                    });
+                    return i;
                 }
                 return -1;
             };
@@ -357,7 +377,8 @@ class Danmaku {
                     });
 
                     // ensure and adjust danmaku position
-                    const tunnel = getTunnel(danmakuItem, dan.type, itemWidth);
+                    const animationDuration = this._danAnimation(dan.type);
+                    const tunnel = getTunnel(danmakuItem, dan.type, itemWidth, parseFloat(animationDuration) * 1000);
                     switch (dan.type) {
                         case 'right':
                             if (tunnel >= 0) {
@@ -393,7 +414,7 @@ class Danmaku {
                     if (tunnel >= 0) {
                         // move
                         danmakuItem.classList.add('dplayer-danmaku-move');
-                        danmakuItem.style.animationDuration = this._danAnimation(dan.type);
+                        danmakuItem.style.animationDuration = animationDuration;
 
                         // insert
                         docFragment.appendChild(danmakuItem);
@@ -467,7 +488,9 @@ class Danmaku {
     resize(): void {
         // Do not retarget an animation that is already in flight. Rewriting its
         // translateX destination produces a visible horizontal jump. New comments
-        // always capture the current container width in draw().
+        // always capture the dimensions cached by ResizeObserver before draw().
+        this.containerWidth = this.container.clientWidth;
+        this.containerHeight = this.container.clientHeight;
     }
 
     hide(): void {

@@ -411,6 +411,14 @@
                 }
             }
         }
+        .dplayer-volume-bar-always-visible & .dplayer-volume {
+            .dplayer-volume-bar-wrap .dplayer-volume-bar {
+                width: 45px;
+            }
+            .dplayer-volume-bar-wrap .dplayer-volume-bar .dplayer-volume-bar-inner .dplayer-thumb {
+                transform: scale(1);
+            }
+        }
         .dplayer-subtitle-btn {
             display: inline-block;
             height: 100%;

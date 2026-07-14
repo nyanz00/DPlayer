@@ -25,19 +25,25 @@ interface DanmakuOptionsAPI {
     addition?: string[];
     user?: string;
 }
+interface DanmakuTunnelItem {
+    element: HTMLElement;
+    width: number;
+    startedAt: number;
+    duration: number;
+}
 declare class Danmaku {
     options: DanmakuOptions;
     player: DPlayer;
     container: HTMLElement;
     danTunnel: {
         right: {
-            [key: string]: HTMLElement[];
+            [key: string]: DanmakuTunnelItem[];
         };
         top: {
-            [key: string]: HTMLElement[];
+            [key: string]: DanmakuTunnelItem[];
         };
         bottom: {
-            [key: string]: HTMLElement[];
+            [key: string]: DanmakuTunnelItem[];
         };
     };
     danIndex: number;

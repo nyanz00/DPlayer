@@ -456,17 +456,25 @@ class Controller {
     }
 
     show(): void {
-        if (this.isShow()) return;
+        const wasVisible = this.isShow();
         this.player.container.classList.remove('dplayer-hide-controller');
-        this.player.events.trigger('controller_show');
+        if (!wasVisible) {
+            this.player.events.trigger('controller_show');
+        }
+        this.player.options.controllerVisibilityCallback?.(true);
     }
 
     hide() : void{
-        if (!this.isShow()) return;
+        const wasVisible = this.isShow();
+        if (!wasVisible) {
+            this.player.options.controllerVisibilityCallback?.(false);
+            return;
+        }
         this.player.container.classList.add('dplayer-hide-controller');
         this.player.setting.hide();
         this.player.comment && this.player.comment.hide();
         this.player.events.trigger('controller_hide');
+        this.player.options.controllerVisibilityCallback?.(false);
     }
 
     isShow(): boolean {
