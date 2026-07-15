@@ -48,12 +48,11 @@ declare class Danmaku {
         };
     };
     danIndex: number;
-    danFontSize: number;
     dan: DPlayerType.Dan[];
     _opacity: number;
     events: Events;
     unlimited: boolean;
-    context: CanvasRenderingContext2D | null;
+    measureContexts: Map<number, CanvasRenderingContext2D>;
     showing: boolean;
     paused: boolean;
     containerWidth: number;

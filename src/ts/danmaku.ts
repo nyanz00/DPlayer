@@ -53,13 +53,12 @@ class Danmaku {
         bottom: {[key: string]: DanmakuTunnelItem[]},
     };
     danIndex: number;
-    danFontSize: number;
     dan: DPlayerType.Dan[];
     _opacity: number;
     events: Events;
     unlimited: boolean;
 
-    context: CanvasRenderingContext2D | null = null;
+    measureContexts = new Map<number, CanvasRenderingContext2D>();
     showing: boolean;
     paused = false;
     containerWidth: number;
@@ -76,7 +75,6 @@ class Danmaku {
             bottom: {},
         };
         this.danIndex = 0;
-        this.danFontSize = 24; // 24px
         this.dan = [];
         this.showing = true;
         this._opacity = this.options.opacity;
@@ -84,8 +82,6 @@ class Danmaku {
         this.unlimited = this.options.unlimited === 1;
         this.containerWidth = this.container.clientWidth;
         this.containerHeight = this.container.clientHeight;
-        this._measure('', 0);
-
         this.load();
     }
 
@@ -473,17 +469,18 @@ class Danmaku {
     }
 
     _measure(text: string, itemFontSize: number): number {
-        if (!this.context || this.danFontSize !== itemFontSize) {
-            this.danFontSize = itemFontSize;
-            this.context = document.createElement('canvas').getContext('2d');
-            this.context!.font = `bold ${this.danFontSize}px "Segoe UI", Arial`;
+        let context = this.measureContexts.get(itemFontSize);
+        if (!context) {
+            context = document.createElement('canvas').getContext('2d')!;
+            context.font = `bold ${itemFontSize}px "Segoe UI", Arial`;
+            this.measureContexts.set(itemFontSize, context);
         }
 
         // returns the width of the widest line
         const lines = text.split('\n');
         let maxWidth = 0;
         for (let i = 0; i < lines.length; i++) {
-            maxWidth = Math.max(maxWidth, this.context!.measureText(lines[i]).width);
+            maxWidth = Math.max(maxWidth, context.measureText(lines[i]).width);
         }
         return maxWidth;
     }
@@ -517,7 +514,9 @@ class Danmaku {
         // Do not retarget an animation that is already in flight. Rewriting its
         // translateX destination produces a visible horizontal jump. New comments
         // always capture the dimensions cached by ResizeObserver before draw().
-        this.containerWidth = this.container.clientWidth;
+        const width = this.container.clientWidth;
+        if (width !== this.containerWidth) this.measureContexts.clear();
+        this.containerWidth = width;
         this.containerHeight = this.container.clientHeight;
     }
 
