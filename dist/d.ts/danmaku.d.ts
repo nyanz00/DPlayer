@@ -30,6 +30,7 @@ interface DanmakuTunnelItem {
     width: number;
     startedAt: number;
     duration: number;
+    animation?: Animation;
 }
 declare class Danmaku {
     options: DanmakuOptions;
@@ -55,6 +56,9 @@ declare class Danmaku {
     context: CanvasRenderingContext2D | null;
     showing: boolean;
     paused: boolean;
+    containerWidth: number;
+    containerHeight: number;
+    animations: Set<Animation>;
     constructor(options: DanmakuOptions);
     load(): void;
     reload(newAPI: DanmakuOptionsAPI): void;

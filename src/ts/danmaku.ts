@@ -35,6 +35,12 @@ interface DanmakuTunnelItem {
     width: number,
     startedAt: number,
     duration: number,
+    animation?: Animation,
+}
+
+interface DanmakuTunnelPlacement {
+    lane: number,
+    item: DanmakuTunnelItem,
 }
 
 class Danmaku {
@@ -58,6 +64,7 @@ class Danmaku {
     paused = false;
     containerWidth: number;
     containerHeight: number;
+    animations = new Set<Animation>();
 
     constructor(options: DanmakuOptions) {
         this.options = options;
@@ -254,7 +261,8 @@ class Danmaku {
             // getBoundingClientRect() here forced a synchronous layout for every active
             // comment whenever a new comment arrived, which visibly disturbed animations.
             const canShareRightLane = (previous: DanmakuTunnelItem, width: number, duration: number, now: number) => {
-                const elapsed = Math.max(0, now - previous.startedAt);
+                const animationTime = previous.animation?.currentTime;
+                const elapsed = Math.max(0, typeof animationTime === 'number' ? animationTime : now - previous.startedAt);
                 if (elapsed >= previous.duration) return true;
 
                 const progress = elapsed / previous.duration;
@@ -272,7 +280,12 @@ class Danmaku {
                 return catchUpTime >= remaining;
             };
 
-            const getTunnel = (danmakuItem: HTMLElement, type: DPlayerType.DanmakuType, width: number, duration: number) => {
+            const getTunnel = (
+                danmakuItem: HTMLElement,
+                type: DPlayerType.DanmakuType,
+                width: number,
+                duration: number,
+            ): DanmakuTunnelPlacement | null => {
                 const now = performance.now();
                 const tunnelItem: DanmakuTunnelItem = { element: danmakuItem, width, startedAt: now, duration };
 
@@ -290,18 +303,24 @@ class Danmaku {
                     } else {
                         this.danTunnel[type][i + ''] = [tunnelItem];
                     }
-                    danmakuItem.addEventListener('animationend', () => {
-                        const currentLane = this.danTunnel[type][i + ''];
-                        if (!currentLane) return;
-                        const index = currentLane.findIndex(item => item.element === danmakuItem);
-                        if (index >= 0) currentLane.splice(index, 1);
-                    });
-                    return i;
+                    return { lane: i, item: tunnelItem };
                 }
-                return -1;
+                return null;
+            };
+
+            const removeTunnelItem = (type: DPlayerType.DanmakuType, placement: DanmakuTunnelPlacement) => {
+                const lane = this.danTunnel[type][placement.lane + ''];
+                if (lane) {
+                    const index = lane.indexOf(placement.item);
+                    if (index >= 0) lane.splice(index, 1);
+                }
+                if (placement.item.element.parentNode === this.container) {
+                    this.container.removeChild(placement.item.element);
+                }
             };
 
             const docFragment = document.createDocumentFragment();
+            const startAnimations: Array<() => void> = [];
 
             for (let i = 0; i < danList.length; i++) {
 
@@ -371,39 +390,49 @@ class Danmaku {
                         danmakuItem.textContent = line;
                     }
 
-                    // set event to remove this danmaku
-                    danmakuItem.addEventListener('animationend', () => {
-                        this.container.removeChild(danmakuItem);
-                    });
-
                     // ensure and adjust danmaku position
                     const animationDuration = this._danAnimation(dan.type);
-                    const tunnel = getTunnel(danmakuItem, dan.type, itemWidth, parseFloat(animationDuration) * 1000);
+                    const duration = parseFloat(animationDuration) * 1000;
+                    const placement = getTunnel(danmakuItem, dan.type, itemWidth, duration);
                     switch (dan.type) {
                         case 'right':
-                            if (tunnel >= 0) {
+                            if (placement !== null) {
                                 danmakuItem.style.width = itemWidth + 1 + 'px';
-                                danmakuItem.style.top = itemHeight * tunnel + 8 + 'px';
-                                danmakuItem.style.transform = `translateX(-${danWidth}px)`;
+                                danmakuItem.style.top = itemHeight * placement.lane + 8 + 'px';
+                                danmakuItem.style.transform = `translate3d(${itemWidth + 1}px, 0, 0)`;
                                 danmakuItem.style.willChange = 'transform';
-                                // In Safari and the WKWebView browser on iOS/iPadOS, a rendering bug causes the
-                                // danmaku to flicker if try to show it right away, so hide it for now.
-                                if (utils.isWebKit) {
-                                    danmakuItem.style.display = 'none';
-                                }
+                                startAnimations.push(() => {
+                                    // Web Animations gives every rolling comment an independent compositor
+                                    // timeline. Adding a new DOM node can no longer restart or retarget the
+                                    // transforms of comments that are already moving.
+                                    const animation = danmakuItem.animate(
+                                        [
+                                            { transform: `translate3d(${itemWidth + 1}px, 0, 0)` },
+                                            { transform: `translate3d(-${danWidth}px, 0, 0)` },
+                                        ],
+                                        { duration, easing: 'linear', fill: 'forwards' },
+                                    );
+                                    placement.item.animation = animation;
+                                    this.animations.add(animation);
+                                    if (this.paused) animation.pause();
+                                    animation.onfinish = () => {
+                                        this.animations.delete(animation);
+                                        removeTunnelItem(dan.type, placement);
+                                    };
+                                });
                             }
                             break;
                         case 'top':
-                            if (tunnel >= 0) {
+                            if (placement !== null) {
                                 danmakuItem.style.width = itemWidth + 1 + 'px';
-                                danmakuItem.style.top = itemHeight * tunnel + 8 + 'px';
+                                danmakuItem.style.top = itemHeight * placement.lane + 8 + 'px';
                                 danmakuItem.style.willChange = 'visibility';
                             }
                             break;
                         case 'bottom':
-                            if (tunnel >= 0) {
+                            if (placement !== null) {
                                 danmakuItem.style.width = itemWidth + 1 + 'px';
-                                danmakuItem.style.bottom = itemHeight * tunnel + 8 + 'px';
+                                danmakuItem.style.bottom = itemHeight * placement.lane + 8 + 'px';
                                 danmakuItem.style.willChange = 'visibility';
                             }
                             break;
@@ -411,27 +440,22 @@ class Danmaku {
                             console.error(`Can't handled danmaku type: ${dan.type}`);
                     }
 
-                    if (tunnel >= 0) {
-                        // move
-                        danmakuItem.classList.add('dplayer-danmaku-move');
-                        danmakuItem.style.animationDuration = animationDuration;
+                    if (placement !== null) {
+                        if (dan.type !== 'right') {
+                            danmakuItem.classList.add('dplayer-danmaku-move');
+                            danmakuItem.style.animationDuration = animationDuration;
+                            danmakuItem.addEventListener('animationend', () => removeTunnelItem(dan.type, placement), { once: true });
+                        }
 
                         // insert
                         docFragment.appendChild(danmakuItem);
-
-                        // In Safari and the WKWebView browser:
-                        // Wait 0 seconds with setTimeout() (important!) and then unhide
-                        if (utils.isWebKit && dan.type === 'right') {
-                            setTimeout(() => {
-                                danmakuItem.style.display = '';
-                            }, 0);
-                        }
                     }
                 }
             }
 
             // draw danmaku
             this.container.appendChild(docFragment);
+            startAnimations.forEach(start => start());
             return docFragment;
         }
 
@@ -440,10 +464,12 @@ class Danmaku {
 
     play(): void {
         this.paused = false;
+        this.animations.forEach(animation => animation.play());
     }
 
     pause(): void {
         this.paused = true;
+        this.animations.forEach(animation => animation.pause());
     }
 
     _measure(text: string, itemFontSize: number): number {
@@ -474,6 +500,8 @@ class Danmaku {
     }
 
     clear(): void {
+        this.animations.forEach(animation => animation.cancel());
+        this.animations.clear();
         this.danTunnel = {
             right: {},
             top: {},

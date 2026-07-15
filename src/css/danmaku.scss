@@ -18,7 +18,9 @@
         font-size: 29px;
         opacity: var(--dplayer-danmaku-opacity);
         white-space: nowrap;
-        text-shadow: 1.2px 1.2px 4px rgba(0, 0, 0, 0.9);
+        // Keep moving glyphs cheap to composite. The previous 4px blurred shadow
+        // was re-rasterized conspicuously at fractional transform positions.
+        text-shadow: 0.5px 0.5px 0.5px rgba(0, 0, 0, 0.7);
         cursor: default;
         user-select: none;
         -webkit-user-select: none;
@@ -36,6 +38,8 @@
         position: absolute;
         right: 0;
         transform: translateX(100%);
+        will-change: transform;
+        backface-visibility: hidden;
         &.dplayer-danmaku-move {
             animation-name: danmaku;
             animation-timing-function: linear;

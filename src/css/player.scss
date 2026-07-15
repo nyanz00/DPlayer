@@ -109,19 +109,23 @@
         }
 
         .dplayer-controller-mask {
+            opacity: 1;
+        }
+        .dplayer-controller {
+            opacity: 1;
+        }
+    }
+
+    // Controller visibility is owned by Controller#setAutoHide. Keeping a second
+    // hover-only rule made the desktop controller disappear without emitting the
+    // visibility event used by host applications such as EPGStation.
+    &.dplayer-hide-controller {
+        cursor: none;
+        .dplayer-controller-mask {
             opacity: 0;
         }
         .dplayer-controller {
             opacity: 0;
-        }
-
-        &:hover {
-            .dplayer-controller-mask {
-                opacity: 1;
-            }
-            .dplayer-controller {
-                opacity: 1;
-            }
         }
     }
 
