@@ -37,18 +37,20 @@ interface DanmakuTunnelItem {
     startedAt: number,
     duration: number,
     animation?: Animation,
+    renderedElapsed?: number,
+    lastRenderedAt?: number,
 }
 
 interface CanvasDanmakuItem {
-    text: string,
-    color: string,
     type: DPlayerType.DanmakuType,
-    fontSize: number,
     x: number,
     y: number,
     startX: number,
     endX: number,
-    border: boolean,
+    bitmap: HTMLCanvasElement,
+    bitmapWidth: number,
+    bitmapHeight: number,
+    bitmapPadding: number,
     placement: DanmakuTunnelPlacement,
 }
 
@@ -518,7 +520,7 @@ class Danmaku {
         const danHeight = this.containerHeight;
 
         const canShareRightLane = (previous: DanmakuTunnelItem, width: number, duration: number, now: number): boolean => {
-            const elapsed = Math.max(0, now - previous.startedAt);
+            const elapsed = Math.max(0, previous.renderedElapsed ?? now - previous.startedAt);
             if (elapsed >= previous.duration) return true;
             const progress = elapsed / previous.duration;
             const previousRight = (danWidth + previous.width) * (1 - progress);
@@ -568,21 +570,23 @@ class Danmaku {
             for (const line of orderedLines) {
                 const placement = getTunnel(type, width, duration);
                 if (!placement) continue;
+                const border = 'border' in source && Boolean(source.border);
+                const bitmap = this.createCanvasDanmakuBitmap(line, color, fontSize, border);
                 const startX = type === 'right' ? danWidth : (danWidth - width) / 2;
                 const endX = type === 'right' ? -width : startX;
                 const y = type === 'bottom'
                     ? danHeight - itemHeight * (placement.lane + 1) - 8
                     : itemHeight * placement.lane + 8;
                 this.canvasItems.add({
-                    text: line,
-                    color,
                     type,
-                    fontSize,
                     x: startX,
                     y,
                     startX,
                     endX,
-                    border: 'border' in source && Boolean(source.border),
+                    bitmap: bitmap.canvas,
+                    bitmapWidth: bitmap.width,
+                    bitmapHeight: bitmap.height,
+                    bitmapPadding: bitmap.padding,
                     placement,
                 });
             }
@@ -594,12 +598,24 @@ class Danmaku {
         if (!context) return;
         this.clearCanvas();
         context.globalAlpha = this._opacity;
-        context.textBaseline = 'top';
-        context.textAlign = 'left';
-        context.lineJoin = 'round';
+        const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
 
         for (const item of [...this.canvasItems]) {
-            const elapsed = Math.max(0, now - item.placement.item.startedAt);
+            const tunnelItem = item.placement.item;
+            const targetElapsed = Math.max(0, now - tunnelItem.startedAt);
+            const renderedElapsed = tunnelItem.renderedElapsed ?? 0;
+            const frameElapsed = tunnelItem.lastRenderedAt === undefined
+                ? Math.min(targetElapsed, 1000 / 60)
+                : Math.max(0, now - tunnelItem.lastRenderedAt);
+            // A throttled requestAnimationFrame used to jump straight to its absolute
+            // timestamp. Advance at a bounded rate and recover the delay gradually so
+            // another video or DWM stall cannot produce a large one-frame displacement.
+            const baseAdvance = Math.min(frameElapsed, 1000 / 30);
+            const delayed = Math.max(0, targetElapsed - renderedElapsed - baseAdvance);
+            const catchUp = Math.min(delayed * 0.12, baseAdvance * 0.25);
+            const elapsed = Math.min(targetElapsed, renderedElapsed + baseAdvance + catchUp);
+            tunnelItem.renderedElapsed = elapsed;
+            tunnelItem.lastRenderedAt = now;
             if (elapsed >= item.placement.item.duration) {
                 this.removeCanvasItem(item);
                 continue;
@@ -608,20 +624,47 @@ class Danmaku {
                 const progress = elapsed / item.placement.item.duration;
                 item.x = item.startX + (item.endX - item.startX) * progress;
             }
-            context.font = `bold ${item.fontSize}px "Segoe UI", Arial`;
-            context.lineWidth = Math.max(1.5, item.fontSize * 0.055);
-            context.strokeStyle = 'rgba(0, 0, 0, 0.82)';
-            context.strokeText(item.text, item.x, item.y);
-            context.fillStyle = item.color;
-            context.fillText(item.text, item.x, item.y);
-            if (item.border) {
-                context.lineWidth = 2;
-                context.strokeStyle = this.options.borderColor;
-                const metrics = context.measureText(item.text);
-                context.strokeRect(item.x - 2, item.y - 2, metrics.width + 4, item.fontSize + 4);
-            }
+            // Cache glyph rasterization per comment. Snapping only the final bitmap
+            // position to a device pixel prevents sub-pixel text re-rasterization from
+            // looking like horizontal vibration while retaining smooth movement.
+            const drawX = Math.round((item.x - item.bitmapPadding) * pixelRatio) / pixelRatio;
+            const drawY = Math.round((item.y - item.bitmapPadding) * pixelRatio) / pixelRatio;
+            context.drawImage(item.bitmap, drawX, drawY, item.bitmapWidth, item.bitmapHeight);
         }
         context.globalAlpha = 1;
+    }
+
+    private createCanvasDanmakuBitmap(
+        text: string,
+        color: string,
+        fontSize: number,
+        border: boolean,
+    ): { canvas: HTMLCanvasElement, width: number, height: number, padding: number } {
+        const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+        const padding = Math.ceil(Math.max(4, fontSize * 0.1));
+        const textWidth = this._measure(text, fontSize);
+        const width = Math.max(1, Math.ceil(textWidth + padding * 2));
+        const height = Math.max(1, Math.ceil(fontSize * 1.35 + padding * 2));
+        const bitmap = document.createElement('canvas');
+        bitmap.width = Math.ceil(width * pixelRatio);
+        bitmap.height = Math.ceil(height * pixelRatio);
+        const context = bitmap.getContext('2d', { alpha: true })!;
+        context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        context.font = `bold ${fontSize}px "Segoe UI", Arial`;
+        context.textBaseline = 'top';
+        context.textAlign = 'left';
+        context.lineJoin = 'round';
+        context.lineWidth = Math.max(1.5, fontSize * 0.055);
+        context.strokeStyle = 'rgba(0, 0, 0, 0.82)';
+        context.strokeText(text, padding, padding);
+        context.fillStyle = color;
+        context.fillText(text, padding, padding);
+        if (border) {
+            context.lineWidth = 2;
+            context.strokeStyle = this.options.borderColor;
+            context.strokeRect(padding - 2, padding - 2, textWidth + 4, fontSize + 4);
+        }
+        return { canvas: bitmap, width, height, padding };
     }
 
     private removeCanvasItem(item: CanvasDanmakuItem): void {
@@ -634,8 +677,12 @@ class Danmaku {
 
     play(): void {
         if (this.options.renderMode === 'canvas' && this.canvasPausedAt !== null) {
-            const pausedDuration = performance.now() - this.canvasPausedAt;
-            for (const item of this.canvasItems) item.placement.item.startedAt += pausedDuration;
+            const now = performance.now();
+            const pausedDuration = now - this.canvasPausedAt;
+            for (const item of this.canvasItems) {
+                item.placement.item.startedAt += pausedDuration;
+                item.placement.item.lastRenderedAt = now;
+            }
             this.canvasPausedAt = null;
         }
         this.paused = false;

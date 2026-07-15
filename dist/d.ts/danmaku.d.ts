@@ -32,17 +32,19 @@ interface DanmakuTunnelItem {
     startedAt: number;
     duration: number;
     animation?: Animation;
+    renderedElapsed?: number;
+    lastRenderedAt?: number;
 }
 interface CanvasDanmakuItem {
-    text: string;
-    color: string;
     type: DPlayerType.DanmakuType;
-    fontSize: number;
     x: number;
     y: number;
     startX: number;
     endX: number;
-    border: boolean;
+    bitmap: HTMLCanvasElement;
+    bitmapWidth: number;
+    bitmapHeight: number;
+    bitmapPadding: number;
     placement: DanmakuTunnelPlacement;
 }
 interface DanmakuTunnelPlacement {
@@ -104,6 +106,7 @@ declare class Danmaku {
     private clearCanvas;
     private drawCanvas;
     private renderCanvas;
+    private createCanvasDanmakuBitmap;
     private removeCanvasItem;
     play(): void;
     pause(): void;
