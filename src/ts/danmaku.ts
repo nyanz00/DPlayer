@@ -13,6 +13,7 @@ interface DanmakuOptions {
     apiBackend: DPlayerType.APIBackend,
     borderColor: string,
     fontSize: number,
+    renderMode: DPlayerType.DanmakuRenderMode,
     time: () => number,
     unlimited: number,
     speedRate: number,
@@ -31,11 +32,24 @@ interface DanmakuOptionsAPI {
 }
 
 interface DanmakuTunnelItem {
-    element: HTMLElement,
+    element: HTMLElement | null,
     width: number,
     startedAt: number,
     duration: number,
     animation?: Animation,
+}
+
+interface CanvasDanmakuItem {
+    text: string,
+    color: string,
+    type: DPlayerType.DanmakuType,
+    fontSize: number,
+    x: number,
+    y: number,
+    startX: number,
+    endX: number,
+    border: boolean,
+    placement: DanmakuTunnelPlacement,
 }
 
 interface DanmakuTunnelPlacement {
@@ -64,6 +78,10 @@ class Danmaku {
     containerWidth: number;
     containerHeight: number;
     animations = new Set<Animation>();
+    canvas: HTMLCanvasElement | null = null;
+    canvasContext: CanvasRenderingContext2D | null = null;
+    canvasItems = new Set<CanvasDanmakuItem>();
+    canvasPausedAt: number | null = null;
 
     constructor(options: DanmakuOptions) {
         this.options = options;
@@ -82,6 +100,7 @@ class Danmaku {
         this.unlimited = this.options.unlimited === 1;
         this.containerWidth = this.container.clientWidth;
         this.containerHeight = this.container.clientHeight;
+        if (this.options.renderMode === 'canvas') this.initCanvas();
         this.load();
     }
 
@@ -207,6 +226,9 @@ class Danmaku {
             }
             this.draw(dan);
         }
+        if (this.options.renderMode === 'canvas') {
+            this.renderCanvas(this.paused && this.canvasPausedAt !== null ? this.canvasPausedAt : performance.now());
+        }
         window.requestAnimationFrame(() => {
             this.frame();
         });
@@ -233,6 +255,10 @@ class Danmaku {
      */
     draw(dan: DPlayerType.DanmakuItem | DPlayerType.DanmakuItem[] | DPlayerType.Dan[]): DocumentFragment | null {
         if (this.showing) {
+            if (this.options.renderMode === 'canvas') {
+                this.drawCanvas(dan);
+                return null;
+            }
 
             // if the dan variable is an object, create and assign an array of only one object
             let danList: DPlayerType.DanmakuItem[] | DPlayerType.Dan[];
@@ -310,7 +336,7 @@ class Danmaku {
                     const index = lane.indexOf(placement.item);
                     if (index >= 0) lane.splice(index, 1);
                 }
-                if (placement.item.element.parentNode === this.container) {
+                if (placement.item.element?.parentNode === this.container) {
                     this.container.removeChild(placement.item.element);
                 }
             };
@@ -458,13 +484,169 @@ class Danmaku {
         return null;
     }
 
+    private initCanvas(): void {
+        this.canvas = document.createElement('canvas');
+        this.canvas.className = 'dplayer-danmaku-canvas';
+        this.canvas.setAttribute('aria-hidden', 'true');
+        this.canvasContext = this.canvas.getContext('2d', { alpha: true });
+        this.container.appendChild(this.canvas);
+        this.resizeCanvas();
+    }
+
+    private resizeCanvas(): void {
+        if (!this.canvas || !this.canvasContext) return;
+        const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+        const width = Math.max(1, Math.round(this.containerWidth * pixelRatio));
+        const height = Math.max(1, Math.round(this.containerHeight * pixelRatio));
+        if (this.canvas.width !== width) this.canvas.width = width;
+        if (this.canvas.height !== height) this.canvas.height = height;
+        this.canvasContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    }
+
+    private clearCanvas(): void {
+        if (!this.canvasContext) return;
+        this.canvasContext.clearRect(0, 0, this.containerWidth, this.containerHeight);
+    }
+
+    private drawCanvas(dan: DPlayerType.DanmakuItem | DPlayerType.DanmakuItem[] | DPlayerType.Dan[]): void {
+        const danList = Array.isArray(dan) ? dan : [dan];
+        const ratio = Math.min(1, this.containerWidth / 1024 * 1.25);
+        const baseItemFontSize = this.options.fontSize * ratio;
+        const itemHeight = baseItemFontSize + (6 * ratio);
+        const laneCount = Math.max(1, Math.floor(this.containerHeight / itemHeight));
+        const danWidth = this.containerWidth;
+        const danHeight = this.containerHeight;
+
+        const canShareRightLane = (previous: DanmakuTunnelItem, width: number, duration: number, now: number): boolean => {
+            const elapsed = Math.max(0, now - previous.startedAt);
+            if (elapsed >= previous.duration) return true;
+            const progress = elapsed / previous.duration;
+            const previousRight = (danWidth + previous.width) * (1 - progress);
+            const gap = danWidth - previousRight;
+            const minimumGap = 10;
+            if (gap < minimumGap) return false;
+            const previousSpeed = (danWidth + previous.width) / previous.duration;
+            const nextSpeed = (danWidth + width) / duration;
+            if (nextSpeed <= previousSpeed) return true;
+            const catchUpTime = (gap - minimumGap) / (nextSpeed - previousSpeed);
+            return catchUpTime >= previous.duration - elapsed;
+        };
+
+        const getTunnel = (type: DPlayerType.DanmakuType, width: number, duration: number): DanmakuTunnelPlacement | null => {
+            const now = performance.now();
+            const tunnelItem: DanmakuTunnelItem = { element: null, width, startedAt: now, duration };
+            for (let i = 0; this.unlimited || i < laneCount; i++) {
+                const lane = this.danTunnel[type][i + ''];
+                if (lane?.length) {
+                    if (type !== 'right' || !canShareRightLane(lane[lane.length - 1], width, duration, now)) continue;
+                    lane.push(tunnelItem);
+                } else {
+                    this.danTunnel[type][i + ''] = [tunnelItem];
+                }
+                return { lane: i, item: tunnelItem };
+            }
+            return null;
+        };
+
+        for (const source of danList) {
+            const color = typeof source.color === 'number' && isFinite(source.color)
+                ? utils.number2Color(source.color)
+                : source.color || '#ffeaea';
+            const convertedType = typeof source.type === 'number' && isFinite(source.type)
+                ? utils.number2Type(source.type) as DPlayerType.DanmakuType
+                : source.type;
+            const type: DPlayerType.DanmakuType = convertedType === 'top' || convertedType === 'bottom' || convertedType === 'right'
+                ? convertedType
+                : 'right';
+            const size = source.size || 'medium';
+            const fontSize = baseItemFontSize * (size === 'big' ? 1.25 : size === 'small' ? 0.8 : 1);
+            const lines = source.text.split('\n');
+            const width = lines.reduce((maximum, line) => Math.max(maximum, this._measure(line, fontSize)), 0);
+            const duration = parseFloat(this._danAnimation(type)) * 1000;
+            const orderedLines = type === 'bottom' ? [...lines].reverse() : lines;
+
+            for (const line of orderedLines) {
+                const placement = getTunnel(type, width, duration);
+                if (!placement) continue;
+                const startX = type === 'right' ? danWidth : (danWidth - width) / 2;
+                const endX = type === 'right' ? -width : startX;
+                const y = type === 'bottom'
+                    ? danHeight - itemHeight * (placement.lane + 1) - 8
+                    : itemHeight * placement.lane + 8;
+                this.canvasItems.add({
+                    text: line,
+                    color,
+                    type,
+                    fontSize,
+                    x: startX,
+                    y,
+                    startX,
+                    endX,
+                    border: 'border' in source && Boolean(source.border),
+                    placement,
+                });
+            }
+        }
+    }
+
+    private renderCanvas(now: number): void {
+        const context = this.canvasContext;
+        if (!context) return;
+        this.clearCanvas();
+        context.globalAlpha = this._opacity;
+        context.textBaseline = 'top';
+        context.textAlign = 'left';
+        context.lineJoin = 'round';
+
+        for (const item of [...this.canvasItems]) {
+            const elapsed = Math.max(0, now - item.placement.item.startedAt);
+            if (elapsed >= item.placement.item.duration) {
+                this.removeCanvasItem(item);
+                continue;
+            }
+            if (item.type === 'right') {
+                const progress = elapsed / item.placement.item.duration;
+                item.x = item.startX + (item.endX - item.startX) * progress;
+            }
+            context.font = `bold ${item.fontSize}px "Segoe UI", Arial`;
+            context.lineWidth = Math.max(1.5, item.fontSize * 0.055);
+            context.strokeStyle = 'rgba(0, 0, 0, 0.82)';
+            context.strokeText(item.text, item.x, item.y);
+            context.fillStyle = item.color;
+            context.fillText(item.text, item.x, item.y);
+            if (item.border) {
+                context.lineWidth = 2;
+                context.strokeStyle = this.options.borderColor;
+                const metrics = context.measureText(item.text);
+                context.strokeRect(item.x - 2, item.y - 2, metrics.width + 4, item.fontSize + 4);
+            }
+        }
+        context.globalAlpha = 1;
+    }
+
+    private removeCanvasItem(item: CanvasDanmakuItem): void {
+        this.canvasItems.delete(item);
+        const lane = this.danTunnel[item.type][item.placement.lane + ''];
+        if (!lane) return;
+        const index = lane.indexOf(item.placement.item);
+        if (index >= 0) lane.splice(index, 1);
+    }
+
     play(): void {
+        if (this.options.renderMode === 'canvas' && this.canvasPausedAt !== null) {
+            const pausedDuration = performance.now() - this.canvasPausedAt;
+            for (const item of this.canvasItems) item.placement.item.startedAt += pausedDuration;
+            this.canvasPausedAt = null;
+        }
         this.paused = false;
         this.animations.forEach(animation => animation.play());
     }
 
     pause(): void {
         this.paused = true;
+        if (this.options.renderMode === 'canvas' && this.canvasPausedAt === null) {
+            this.canvasPausedAt = performance.now();
+        }
         this.animations.forEach(animation => animation.pause());
     }
 
@@ -505,7 +687,14 @@ class Danmaku {
             bottom: {},
         };
         this.danIndex = 0;
-        this.options.container.innerHTML = '';
+        if (this.options.renderMode === 'canvas') {
+            this.canvasItems.clear();
+            this.canvasPausedAt = this.paused ? performance.now() : null;
+            if (this.canvas && this.canvas.parentNode !== this.container) this.container.appendChild(this.canvas);
+            this.clearCanvas();
+        } else {
+            this.options.container.innerHTML = '';
+        }
 
         this.events && this.events.trigger('danmaku_clear');
     }
@@ -518,6 +707,7 @@ class Danmaku {
         if (width !== this.containerWidth) this.measureContexts.clear();
         this.containerWidth = width;
         this.containerHeight = this.container.clientHeight;
+        if (this.options.renderMode === 'canvas') this.resizeCanvas();
     }
 
     hide(): void {

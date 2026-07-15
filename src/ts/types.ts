@@ -70,6 +70,7 @@ export type PlayerEvents =
 
 export type DanmakuType = 'top' | 'right' | 'bottom';
 export type DanmakuSize = 'big' | 'medium' | 'small';
+export type DanmakuRenderMode = 'dom' | 'canvas';
 export type FullscreenType = 'browser' | 'web';
 
 export interface Options {
@@ -472,6 +473,12 @@ export interface Danmaku {
     fontSize?: number;
 
     /**
+     * @description danmaku renderer. Canvas uses a single composited surface.
+     * @default 'dom'
+     */
+    renderMode?: DanmakuRenderMode;
+
+    /**
      * @description close comment form after send danmaku
      * @default true
      */
@@ -585,6 +592,7 @@ export interface DanmakuInternal {
     unlimited?: boolean;
     speedRate : number;
     fontSize: number;
+    renderMode: DanmakuRenderMode;
     closeCommentFormAfterSend: boolean;
 }
 

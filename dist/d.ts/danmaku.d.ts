@@ -10,6 +10,7 @@ interface DanmakuOptions {
     apiBackend: DPlayerType.APIBackend;
     borderColor: string;
     fontSize: number;
+    renderMode: DPlayerType.DanmakuRenderMode;
     time: () => number;
     unlimited: number;
     speedRate: number;
@@ -26,11 +27,27 @@ interface DanmakuOptionsAPI {
     user?: string;
 }
 interface DanmakuTunnelItem {
-    element: HTMLElement;
+    element: HTMLElement | null;
     width: number;
     startedAt: number;
     duration: number;
     animation?: Animation;
+}
+interface CanvasDanmakuItem {
+    text: string;
+    color: string;
+    type: DPlayerType.DanmakuType;
+    fontSize: number;
+    x: number;
+    y: number;
+    startX: number;
+    endX: number;
+    border: boolean;
+    placement: DanmakuTunnelPlacement;
+}
+interface DanmakuTunnelPlacement {
+    lane: number;
+    item: DanmakuTunnelItem;
 }
 declare class Danmaku {
     options: DanmakuOptions;
@@ -58,6 +75,10 @@ declare class Danmaku {
     containerWidth: number;
     containerHeight: number;
     animations: Set<Animation>;
+    canvas: HTMLCanvasElement | null;
+    canvasContext: CanvasRenderingContext2D | null;
+    canvasItems: Set<CanvasDanmakuItem>;
+    canvasPausedAt: number | null;
     constructor(options: DanmakuOptions);
     load(): void;
     reload(newAPI: DanmakuOptionsAPI): void;
@@ -78,6 +99,12 @@ declare class Danmaku {
      * size - danmaku size, `medium` `big` `small`, default: `medium`
      */
     draw(dan: DPlayerType.DanmakuItem | DPlayerType.DanmakuItem[] | DPlayerType.Dan[]): DocumentFragment | null;
+    private initCanvas;
+    private resizeCanvas;
+    private clearCanvas;
+    private drawCanvas;
+    private renderCanvas;
+    private removeCanvasItem;
     play(): void;
     pause(): void;
     _measure(text: string, itemFontSize: number): number;
