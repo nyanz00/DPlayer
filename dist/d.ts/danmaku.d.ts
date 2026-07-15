@@ -1,6 +1,7 @@
 import DPlayer from './player';
 import Events from './events';
 import * as DPlayerType from './types';
+import WebGLDanmakuRenderer, { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
 interface DanmakuOptions {
     player: DPlayer;
     container: HTMLElement;
@@ -11,6 +12,7 @@ interface DanmakuOptions {
     borderColor: string;
     fontSize: number;
     renderMode: DPlayerType.DanmakuRenderMode;
+    debugMotion: boolean;
     time: () => number;
     unlimited: number;
     speedRate: number;
@@ -45,6 +47,7 @@ interface CanvasDanmakuItem {
     bitmapWidth: number;
     bitmapHeight: number;
     bitmapPadding: number;
+    webglSprite?: WebGLDanmakuSprite;
     placement: DanmakuTunnelPlacement;
 }
 interface DanmakuTunnelPlacement {
@@ -79,6 +82,7 @@ declare class Danmaku {
     animations: Set<Animation>;
     canvas: HTMLCanvasElement | null;
     canvasContext: CanvasRenderingContext2D | null;
+    webglRenderer: WebGLDanmakuRenderer | null;
     canvasItems: Set<CanvasDanmakuItem>;
     canvasPausedAt: number | null;
     constructor(options: DanmakuOptions);
@@ -119,6 +123,7 @@ declare class Danmaku {
     toggle(): void;
     unlimit(boolean: boolean): void;
     speed(rate: number): void;
+    private usesSurfaceRenderer;
     _danAnimation(position: DPlayerType.DanmakuType): string;
 }
 export default Danmaku;

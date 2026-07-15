@@ -3,6 +3,7 @@ import Events from './events';
 import utils from './utils';
 import defaultApiBackend from './api';
 import * as DPlayerType from './types';
+import WebGLDanmakuRenderer, { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
 
 interface DanmakuOptions {
     player: DPlayer,
@@ -14,6 +15,7 @@ interface DanmakuOptions {
     borderColor: string,
     fontSize: number,
     renderMode: DPlayerType.DanmakuRenderMode,
+    debugMotion: boolean,
     time: () => number,
     unlimited: number,
     speedRate: number,
@@ -51,6 +53,7 @@ interface CanvasDanmakuItem {
     bitmapWidth: number,
     bitmapHeight: number,
     bitmapPadding: number,
+    webglSprite?: WebGLDanmakuSprite,
     placement: DanmakuTunnelPlacement,
 }
 
@@ -82,6 +85,7 @@ class Danmaku {
     animations = new Set<Animation>();
     canvas: HTMLCanvasElement | null = null;
     canvasContext: CanvasRenderingContext2D | null = null;
+    webglRenderer: WebGLDanmakuRenderer | null = null;
     canvasItems = new Set<CanvasDanmakuItem>();
     canvasPausedAt: number | null = null;
 
@@ -102,7 +106,7 @@ class Danmaku {
         this.unlimited = this.options.unlimited === 1;
         this.containerWidth = this.container.clientWidth;
         this.containerHeight = this.container.clientHeight;
-        if (this.options.renderMode === 'canvas') this.initCanvas();
+        if (this.usesSurfaceRenderer()) this.initCanvas();
         this.load();
     }
 
@@ -228,7 +232,7 @@ class Danmaku {
             }
             this.draw(dan);
         }
-        if (this.options.renderMode === 'canvas') {
+        if (this.usesSurfaceRenderer()) {
             this.renderCanvas(this.paused && this.canvasPausedAt !== null ? this.canvasPausedAt : performance.now());
         }
         window.requestAnimationFrame(() => {
@@ -257,7 +261,7 @@ class Danmaku {
      */
     draw(dan: DPlayerType.DanmakuItem | DPlayerType.DanmakuItem[] | DPlayerType.Dan[]): DocumentFragment | null {
         if (this.showing) {
-            if (this.options.renderMode === 'canvas') {
+            if (this.usesSurfaceRenderer()) {
                 this.drawCanvas(dan);
                 return null;
             }
@@ -487,17 +491,37 @@ class Danmaku {
     }
 
     private initCanvas(): void {
-        this.canvas = document.createElement('canvas');
-        this.canvas.className = 'dplayer-danmaku-canvas';
-        this.canvas.setAttribute('aria-hidden', 'true');
-        this.canvasContext = this.canvas.getContext('2d', { alpha: true });
+        const createCanvas = (): HTMLCanvasElement => {
+            const canvas = document.createElement('canvas');
+            canvas.className = 'dplayer-danmaku-canvas';
+            canvas.setAttribute('aria-hidden', 'true');
+            return canvas;
+        };
+
+        this.canvas = createCanvas();
+        if (this.options.renderMode === 'webgl') {
+            try {
+                this.webglRenderer = new WebGLDanmakuRenderer(this.canvas);
+            } catch (error) {
+                console.warn('[DPlayer] WebGL danmaku is unavailable; falling back to Canvas.', error);
+                this.canvas = createCanvas();
+                this.canvasContext = this.canvas.getContext('2d', { alpha: true });
+            }
+        } else {
+            this.canvasContext = this.canvas.getContext('2d', { alpha: true });
+        }
         this.container.appendChild(this.canvas);
         this.resizeCanvas();
     }
 
     private resizeCanvas(): void {
-        if (!this.canvas || !this.canvasContext) return;
+        if (!this.canvas) return;
         const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+        if (this.webglRenderer) {
+            this.webglRenderer.resize(this.containerWidth, this.containerHeight, pixelRatio);
+            return;
+        }
+        if (!this.canvasContext) return;
         const width = Math.max(1, Math.round(this.containerWidth * pixelRatio));
         const height = Math.max(1, Math.round(this.containerHeight * pixelRatio));
         if (this.canvas.width !== width) this.canvas.width = width;
@@ -506,6 +530,10 @@ class Danmaku {
     }
 
     private clearCanvas(): void {
+        if (this.webglRenderer) {
+            this.webglRenderer.clear();
+            return;
+        }
         if (!this.canvasContext) return;
         this.canvasContext.clearRect(0, 0, this.containerWidth, this.containerHeight);
     }
@@ -572,6 +600,7 @@ class Danmaku {
                 if (!placement) continue;
                 const border = 'border' in source && Boolean(source.border);
                 const bitmap = this.createCanvasDanmakuBitmap(line, color, fontSize, border);
+                const webglSprite = this.webglRenderer?.createSprite(bitmap.canvas, bitmap.width, bitmap.height);
                 const startX = type === 'right' ? danWidth : (danWidth - width) / 2;
                 const endX = type === 'right' ? -width : startX;
                 const y = type === 'bottom'
@@ -587,6 +616,7 @@ class Danmaku {
                     bitmapWidth: bitmap.width,
                     bitmapHeight: bitmap.height,
                     bitmapPadding: bitmap.padding,
+                    webglSprite,
                     placement,
                 });
             }
@@ -595,9 +625,12 @@ class Danmaku {
 
     private renderCanvas(now: number): void {
         const context = this.canvasContext;
-        if (!context) return;
-        this.clearCanvas();
-        context.globalAlpha = this._opacity;
+        if (!context && !this.webglRenderer) return;
+        if (this.webglRenderer) this.webglRenderer.beginFrame(this._opacity);
+        else {
+            this.clearCanvas();
+            context!.globalAlpha = this._opacity;
+        }
         const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
 
         for (const item of [...this.canvasItems]) {
@@ -629,9 +662,29 @@ class Danmaku {
             // looking like horizontal vibration while retaining smooth movement.
             const drawX = Math.round((item.x - item.bitmapPadding) * pixelRatio) / pixelRatio;
             const drawY = Math.round((item.y - item.bitmapPadding) * pixelRatio) / pixelRatio;
-            context.drawImage(item.bitmap, drawX, drawY, item.bitmapWidth, item.bitmapHeight);
+            if (this.webglRenderer && item.webglSprite) {
+                this.webglRenderer.drawSprite(item.webglSprite, drawX, drawY);
+                if (this.options.debugMotion && item.type === 'right') {
+                    this.webglRenderer.drawDebugMarker(
+                        drawX,
+                        drawY + item.bitmapPadding,
+                        item.bitmapHeight - item.bitmapPadding * 2,
+                    );
+                }
+            } else if (context) {
+                context.drawImage(item.bitmap, drawX, drawY, item.bitmapWidth, item.bitmapHeight);
+                if (this.options.debugMotion && item.type === 'right') {
+                    context.fillStyle = '#ff2020';
+                    context.fillRect(
+                        drawX - 7,
+                        drawY + item.bitmapPadding,
+                        4,
+                        Math.max(8, item.bitmapHeight - item.bitmapPadding * 2),
+                    );
+                }
+            }
         }
-        context.globalAlpha = 1;
+        if (context) context.globalAlpha = 1;
     }
 
     private createCanvasDanmakuBitmap(
@@ -669,6 +722,7 @@ class Danmaku {
 
     private removeCanvasItem(item: CanvasDanmakuItem): void {
         this.canvasItems.delete(item);
+        this.webglRenderer?.deleteSprite(item.webglSprite);
         const lane = this.danTunnel[item.type][item.placement.lane + ''];
         if (!lane) return;
         const index = lane.indexOf(item.placement.item);
@@ -676,7 +730,7 @@ class Danmaku {
     }
 
     play(): void {
-        if (this.options.renderMode === 'canvas' && this.canvasPausedAt !== null) {
+        if (this.usesSurfaceRenderer() && this.canvasPausedAt !== null) {
             const now = performance.now();
             const pausedDuration = now - this.canvasPausedAt;
             for (const item of this.canvasItems) {
@@ -691,7 +745,7 @@ class Danmaku {
 
     pause(): void {
         this.paused = true;
-        if (this.options.renderMode === 'canvas' && this.canvasPausedAt === null) {
+        if (this.usesSurfaceRenderer() && this.canvasPausedAt === null) {
             this.canvasPausedAt = performance.now();
         }
         this.animations.forEach(animation => animation.pause());
@@ -734,7 +788,8 @@ class Danmaku {
             bottom: {},
         };
         this.danIndex = 0;
-        if (this.options.renderMode === 'canvas') {
+        if (this.usesSurfaceRenderer()) {
+            for (const item of this.canvasItems) this.webglRenderer?.deleteSprite(item.webglSprite);
             this.canvasItems.clear();
             this.canvasPausedAt = this.paused ? performance.now() : null;
             if (this.canvas && this.canvas.parentNode !== this.container) this.container.appendChild(this.canvas);
@@ -754,7 +809,7 @@ class Danmaku {
         if (width !== this.containerWidth) this.measureContexts.clear();
         this.containerWidth = width;
         this.containerHeight = this.container.clientHeight;
-        if (this.options.renderMode === 'canvas') this.resizeCanvas();
+        if (this.usesSurfaceRenderer()) this.resizeCanvas();
     }
 
     hide(): void {
@@ -787,6 +842,10 @@ class Danmaku {
 
     speed(rate: number): void {
         this.options.speedRate = rate;
+    }
+
+    private usesSurfaceRenderer(): boolean {
+        return this.options.renderMode === 'canvas' || this.options.renderMode === 'webgl';
     }
 
     _danAnimation(position: DPlayerType.DanmakuType): string {
