@@ -67,8 +67,6 @@ export default (options: DPlayerType.Options): DPlayerType.OptionsInternal => {
         !options.danmaku.user && (options.danmaku.user = 'DPlayer');
         !options.danmaku.speedRate && (options.danmaku.speedRate = 1);
         !options.danmaku.fontSize && (options.danmaku.fontSize = 35);
-        !options.danmaku.renderMode && (options.danmaku.renderMode = 'dom');
-        options.danmaku.debugMotion = options.danmaku.debugMotion === true;
         options.danmaku.closeCommentFormAfterSend !== false && (options.danmaku.closeCommentFormAfterSend = true);
     }
     if (options.subtitle) {

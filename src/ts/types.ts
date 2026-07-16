@@ -70,7 +70,6 @@ export type PlayerEvents =
 
 export type DanmakuType = 'top' | 'right' | 'bottom';
 export type DanmakuSize = 'big' | 'medium' | 'small';
-export type DanmakuRenderMode = 'dom' | 'canvas' | 'webgl' | 'webgl-worker' | 'webgl-composite';
 export type FullscreenType = 'browser' | 'web';
 
 export interface Options {
@@ -473,18 +472,6 @@ export interface Danmaku {
     fontSize?: number;
 
     /**
-     * @description danmaku renderer. Canvas and WebGL use a single composited surface.
-     * @default 'dom'
-     */
-    renderMode?: DanmakuRenderMode;
-
-    /**
-     * @description draw a solid marker beside moving comments for motion diagnostics
-     * @default false
-     */
-    debugMotion?: boolean;
-
-    /**
      * @description close comment form after send danmaku
      * @default true
      */
@@ -598,8 +585,6 @@ export interface DanmakuInternal {
     unlimited?: boolean;
     speedRate : number;
     fontSize: number;
-    renderMode: DanmakuRenderMode;
-    debugMotion: boolean;
     closeCommentFormAfterSend: boolean;
 }
 

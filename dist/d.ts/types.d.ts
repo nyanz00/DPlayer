@@ -15,7 +15,6 @@ export type VideoEvents = 'abort' | 'canplay' | 'canplaythrough' | 'durationchan
 export type PlayerEvents = 'screenshot' | 'thumbnails_show' | 'thumbnails_hide' | 'danmaku_show' | 'danmaku_hide' | 'danmaku_clear' | 'danmaku_load_start' | 'danmaku_load_end' | 'danmaku_send' | 'danmaku_opacity' | 'contextmenu_show' | 'contextmenu_hide' | 'notice_show' | 'notice_hide' | 'quality_start' | 'quality_end' | 'destroy' | 'resize' | 'fullscreen' | 'fullscreen_cancel' | 'webfullscreen' | 'webfullscreen_cancel' | 'subtitle_show' | 'subtitle_hide' | 'subtitle_change' | 'controller_show' | 'controller_hide' | 'theme_change';
 export type DanmakuType = 'top' | 'right' | 'bottom';
 export type DanmakuSize = 'big' | 'medium' | 'small';
-export type DanmakuRenderMode = 'dom' | 'canvas' | 'webgl' | 'webgl-worker' | 'webgl-composite';
 export type FullscreenType = 'browser' | 'web';
 export interface Options {
     /**
@@ -356,16 +355,6 @@ export interface Danmaku {
      */
     fontSize?: number;
     /**
-     * @description danmaku renderer. Canvas and WebGL use a single composited surface.
-     * @default 'dom'
-     */
-    renderMode?: DanmakuRenderMode;
-    /**
-     * @description draw a solid marker beside moving comments for motion diagnostics
-     * @default false
-     */
-    debugMotion?: boolean;
-    /**
      * @description close comment form after send danmaku
      * @default true
      */
@@ -476,8 +465,6 @@ export interface DanmakuInternal {
     unlimited?: boolean;
     speedRate: number;
     fontSize: number;
-    renderMode: DanmakuRenderMode;
-    debugMotion: boolean;
     closeCommentFormAfterSend: boolean;
 }
 export interface Plugins {

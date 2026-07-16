@@ -2,7 +2,6 @@ import DPlayer from './player';
 import Events from './events';
 import * as DPlayerType from './types';
 import WebGLDanmakuRenderer, { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
-import WebGLDanmakuWorkerRenderer from './webgl-danmaku-worker-renderer';
 interface DanmakuOptions {
     player: DPlayer;
     container: HTMLElement;
@@ -12,8 +11,6 @@ interface DanmakuOptions {
     apiBackend: DPlayerType.APIBackend;
     borderColor: string;
     fontSize: number;
-    renderMode: DPlayerType.DanmakuRenderMode;
-    debugMotion: boolean;
     time: () => number;
     unlimited: number;
     speedRate: number;
@@ -34,12 +31,10 @@ interface DanmakuTunnelItem {
     width: number;
     startedAt: number;
     duration: number;
-    animation?: Animation;
     renderedElapsed?: number;
     lastRenderedAt?: number;
 }
 interface CanvasDanmakuItem {
-    workerId: number;
     type: DPlayerType.DanmakuType;
     x: number;
     y: number;
@@ -50,7 +45,6 @@ interface CanvasDanmakuItem {
     bitmapHeight: number;
     bitmapPadding: number;
     webglSprite?: WebGLDanmakuSprite;
-    lastDrawX?: number;
     placement: DanmakuTunnelPlacement;
 }
 interface DanmakuTunnelPlacement {
@@ -82,14 +76,11 @@ declare class Danmaku {
     paused: boolean;
     containerWidth: number;
     containerHeight: number;
-    animations: Set<Animation>;
     canvas: HTMLCanvasElement | null;
     canvasContext: CanvasRenderingContext2D | null;
     webglRenderer: WebGLDanmakuRenderer | null;
-    workerRenderer: WebGLDanmakuWorkerRenderer | null;
     canvasItems: Set<CanvasDanmakuItem>;
     canvasPausedAt: number | null;
-    nextWorkerId: number;
     compositeVideos: Set<HTMLVideoElement>;
     compositeFailed: boolean;
     constructor(options: DanmakuOptions);
@@ -121,7 +112,6 @@ declare class Danmaku {
     private restoreCompositeVideos;
     private createCanvasDanmakuBitmap;
     private removeCanvasItem;
-    private removeExpiredWorkerItems;
     play(): void;
     pause(): void;
     _measure(text: string, itemFontSize: number): number;
@@ -133,7 +123,6 @@ declare class Danmaku {
     toggle(): void;
     unlimit(boolean: boolean): void;
     speed(rate: number): void;
-    private usesSurfaceRenderer;
     _danAnimation(position: DPlayerType.DanmakuType): string;
 }
 export default Danmaku;

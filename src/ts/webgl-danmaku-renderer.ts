@@ -4,8 +4,6 @@ export interface WebGLDanmakuSprite {
     height: number,
 }
 
-type WebGLDanmakuCanvas = HTMLCanvasElement | OffscreenCanvas;
-
 export default class WebGLDanmakuRenderer {
     private readonly gl: WebGLRenderingContext;
     private readonly program: WebGLProgram;
@@ -14,12 +12,11 @@ export default class WebGLDanmakuRenderer {
     private readonly rectangleLocation: WebGLUniformLocation;
     private readonly colorLocation: WebGLUniformLocation;
     private readonly opacityLocation: WebGLUniformLocation;
-    private readonly whiteSprite: WebGLDanmakuSprite;
     private videoSprite: WebGLDanmakuSprite | null = null;
     private pixelRatio = 1;
     private frameOpacity = 1;
 
-    constructor(private readonly canvas: WebGLDanmakuCanvas) {
+    constructor(private readonly canvas: HTMLCanvasElement) {
         const gl = canvas.getContext('webgl', {
             alpha: true,
             antialias: false,
@@ -48,8 +45,6 @@ export default class WebGLDanmakuRenderer {
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         gl.disable(gl.DEPTH_TEST);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1);
-
-        this.whiteSprite = this.createSolidSprite();
     }
 
     resize(width: number, height: number, pixelRatio: number): void {
@@ -73,28 +68,6 @@ export default class WebGLDanmakuRenderer {
         this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
         this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, source);
         return { texture, width, height };
-    }
-
-    private createSolidSprite(): WebGLDanmakuSprite {
-        const texture = this.gl.createTexture();
-        if (!texture) throw new Error('Unable to create WebGL texture');
-        this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
-        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
-        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
-        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
-        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
-        this.gl.texImage2D(
-            this.gl.TEXTURE_2D,
-            0,
-            this.gl.RGBA,
-            1,
-            1,
-            0,
-            this.gl.RGBA,
-            this.gl.UNSIGNED_BYTE,
-            new Uint8Array([255, 255, 255, 255]),
-        );
-        return { texture, width: 1, height: 1 };
     }
 
     deleteSprite(sprite: WebGLDanmakuSprite | undefined): void {
@@ -138,11 +111,6 @@ export default class WebGLDanmakuRenderer {
         this.gl.uniform4f(this.rectangleLocation, x * ratio, y * ratio, sprite.width * ratio, sprite.height * ratio);
         this.gl.uniform4f(this.colorLocation, color[0], color[1], color[2], color[3]);
         this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
-    }
-
-    drawDebugMarker(x: number, y: number, height: number, regressed: boolean): void {
-        const color: [number, number, number, number] = regressed ? [1, 0.78, 0.08, 1] : [1, 0.12, 0.12, 1];
-        this.drawSprite({ ...this.whiteSprite, width: 4, height: Math.max(8, height) }, x - 7, y, color);
     }
 
     clear(): void {

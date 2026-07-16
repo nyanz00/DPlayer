@@ -475,8 +475,6 @@ class DPlayer {
             time: () => this.video.currentTime,
             unlimited: this.user.get('unlimited'),
             speedRate: typeof danmakuAPI === 'boolean' ? 1 : danmakuAPI.speedRate || 1,
-            renderMode: typeof danmakuAPI === 'boolean' ? 'dom' : danmakuAPI.renderMode || 'dom',
-            debugMotion: typeof danmakuAPI === 'boolean' ? false : danmakuAPI.debugMotion === true,
             api: typeof danmakuAPI === 'boolean' ? {} : {
                 id: danmakuAPI.id,
                 address: danmakuAPI.api,
