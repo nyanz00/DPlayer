@@ -11,6 +11,7 @@ class Controller {
     mobileBackwardTime: number;
     mobileForwardTime: number;
     setAutoHideHandler: () => void;
+    wheelVolumeHandler: (event: WheelEvent) => void;
     thumbnails: Thumbnails | null = null;
 
     constructor(player: DPlayer) {
@@ -21,9 +22,17 @@ class Controller {
         this.mobileBackwardTime = 0;
         this.mobileForwardTime = 0;
         this.setAutoHideHandler = () => this.setAutoHide();
+        this.wheelVolumeHandler = (event: WheelEvent) => {
+            if (event.deltaY === 0) return;
+            event.preventDefault();
+            const step = event.deltaY < 0 ? 0.05 : -0.05;
+            this.player.volume(Number((this.player.volume() + step).toFixed(2)));
+            this.setAutoHide();
+        };
         if (!utils.isMobile) {
             this.player.container.addEventListener('mousemove', this.setAutoHideHandler);
             this.player.container.addEventListener('click', this.setAutoHideHandler);
+            this.player.container.addEventListener('wheel', this.wheelVolumeHandler, { passive: false });
         } else {
             this.player.container.addEventListener('touchmove', this.setAutoHideHandler);
         }
@@ -56,12 +65,16 @@ class Controller {
         });
 
         if (!utils.isMobile) {
-            this.player.template.videoWrap.addEventListener('click', () => {
+            const handleBackgroundClick = (event: MouseEvent): void => {
+                if (this.player.paused) {
+                    event.stopPropagation();
+                    this.hide();
+                    return;
+                }
                 this.player.toggle();
-            });
-            this.player.template.controllerMask.addEventListener('click', () => {
-                this.player.toggle();
-            });
+            };
+            this.player.template.videoWrap.addEventListener('click', handleBackgroundClick);
+            this.player.template.controllerMask.addEventListener('click', handleBackgroundClick);
         } else {
             this.player.template.videoWrap.addEventListener('click', () => {
                 this.toggle();
@@ -493,6 +506,7 @@ class Controller {
         if (!utils.isMobile) {
             this.player.container.removeEventListener('mousemove', this.setAutoHideHandler);
             this.player.container.removeEventListener('click', this.setAutoHideHandler);
+            this.player.container.removeEventListener('wheel', this.wheelVolumeHandler);
         } else {
             this.player.container.removeEventListener('touchmove', this.setAutoHideHandler);
         }

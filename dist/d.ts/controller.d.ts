@@ -8,6 +8,7 @@ declare class Controller {
     mobileBackwardTime: number;
     mobileForwardTime: number;
     setAutoHideHandler: () => void;
+    wheelVolumeHandler: (event: WheelEvent) => void;
     thumbnails: Thumbnails | null;
     constructor(player: DPlayer);
     initPlayButton(): void;
