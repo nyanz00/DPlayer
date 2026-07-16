@@ -2,6 +2,7 @@ import DPlayer from './player';
 import Events from './events';
 import * as DPlayerType from './types';
 import WebGLDanmakuRenderer, { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
+import WebGLDanmakuWorkerRenderer from './webgl-danmaku-worker-renderer';
 interface DanmakuOptions {
     player: DPlayer;
     container: HTMLElement;
@@ -38,6 +39,7 @@ interface DanmakuTunnelItem {
     lastRenderedAt?: number;
 }
 interface CanvasDanmakuItem {
+    workerId: number;
     type: DPlayerType.DanmakuType;
     x: number;
     y: number;
@@ -84,8 +86,10 @@ declare class Danmaku {
     canvas: HTMLCanvasElement | null;
     canvasContext: CanvasRenderingContext2D | null;
     webglRenderer: WebGLDanmakuRenderer | null;
+    workerRenderer: WebGLDanmakuWorkerRenderer | null;
     canvasItems: Set<CanvasDanmakuItem>;
     canvasPausedAt: number | null;
+    nextWorkerId: number;
     constructor(options: DanmakuOptions);
     load(): void;
     reload(newAPI: DanmakuOptionsAPI): void;
@@ -113,6 +117,7 @@ declare class Danmaku {
     private renderCanvas;
     private createCanvasDanmakuBitmap;
     private removeCanvasItem;
+    private removeExpiredWorkerItems;
     play(): void;
     pause(): void;
     _measure(text: string, itemFontSize: number): number;

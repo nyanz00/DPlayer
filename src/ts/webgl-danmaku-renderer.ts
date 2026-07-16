@@ -4,6 +4,8 @@ export interface WebGLDanmakuSprite {
     height: number,
 }
 
+type WebGLDanmakuCanvas = HTMLCanvasElement | OffscreenCanvas;
+
 export default class WebGLDanmakuRenderer {
     private readonly gl: WebGLRenderingContext;
     private readonly program: WebGLProgram;
@@ -15,7 +17,7 @@ export default class WebGLDanmakuRenderer {
     private readonly whiteSprite: WebGLDanmakuSprite;
     private pixelRatio = 1;
 
-    constructor(private readonly canvas: HTMLCanvasElement) {
+    constructor(private readonly canvas: WebGLDanmakuCanvas) {
         const gl = canvas.getContext('webgl', {
             alpha: true,
             antialias: false,
@@ -45,13 +47,7 @@ export default class WebGLDanmakuRenderer {
         gl.disable(gl.DEPTH_TEST);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1);
 
-        const white = document.createElement('canvas');
-        white.width = 1;
-        white.height = 1;
-        const context = white.getContext('2d')!;
-        context.fillStyle = '#fff';
-        context.fillRect(0, 0, 1, 1);
-        this.whiteSprite = this.createSprite(white, 1, 1);
+        this.whiteSprite = this.createSolidSprite();
     }
 
     resize(width: number, height: number, pixelRatio: number): void {
@@ -65,7 +61,7 @@ export default class WebGLDanmakuRenderer {
         this.gl.uniform2f(this.resolutionLocation, physicalWidth, physicalHeight);
     }
 
-    createSprite(source: HTMLCanvasElement, width: number, height: number): WebGLDanmakuSprite {
+    createSprite(source: TexImageSource, width: number, height: number): WebGLDanmakuSprite {
         const texture = this.gl.createTexture();
         if (!texture) throw new Error('Unable to create WebGL texture');
         this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
@@ -75,6 +71,28 @@ export default class WebGLDanmakuRenderer {
         this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
         this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, source);
         return { texture, width, height };
+    }
+
+    private createSolidSprite(): WebGLDanmakuSprite {
+        const texture = this.gl.createTexture();
+        if (!texture) throw new Error('Unable to create WebGL texture');
+        this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
+        this.gl.texImage2D(
+            this.gl.TEXTURE_2D,
+            0,
+            this.gl.RGBA,
+            1,
+            1,
+            0,
+            this.gl.RGBA,
+            this.gl.UNSIGNED_BYTE,
+            new Uint8Array([255, 255, 255, 255]),
+        );
+        return { texture, width: 1, height: 1 };
     }
 
     deleteSprite(sprite: WebGLDanmakuSprite | undefined): void {

@@ -70,7 +70,7 @@ export type PlayerEvents =
 
 export type DanmakuType = 'top' | 'right' | 'bottom';
 export type DanmakuSize = 'big' | 'medium' | 'small';
-export type DanmakuRenderMode = 'dom' | 'canvas' | 'webgl';
+export type DanmakuRenderMode = 'dom' | 'canvas' | 'webgl' | 'webgl-worker';
 export type FullscreenType = 'browser' | 'web';
 
 export interface Options {

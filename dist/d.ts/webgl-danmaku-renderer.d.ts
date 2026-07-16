@@ -3,6 +3,7 @@ export interface WebGLDanmakuSprite {
     width: number;
     height: number;
 }
+type WebGLDanmakuCanvas = HTMLCanvasElement | OffscreenCanvas;
 export default class WebGLDanmakuRenderer {
     private readonly canvas;
     private readonly gl;
@@ -14,9 +15,10 @@ export default class WebGLDanmakuRenderer {
     private readonly opacityLocation;
     private readonly whiteSprite;
     private pixelRatio;
-    constructor(canvas: HTMLCanvasElement);
+    constructor(canvas: WebGLDanmakuCanvas);
     resize(width: number, height: number, pixelRatio: number): void;
-    createSprite(source: HTMLCanvasElement, width: number, height: number): WebGLDanmakuSprite;
+    createSprite(source: TexImageSource, width: number, height: number): WebGLDanmakuSprite;
+    private createSolidSprite;
     deleteSprite(sprite: WebGLDanmakuSprite | undefined): void;
     beginFrame(opacity: number): void;
     drawSprite(sprite: WebGLDanmakuSprite, x: number, y: number, color?: [number, number, number, number]): void;
@@ -26,4 +28,5 @@ export default class WebGLDanmakuRenderer {
     private compileShader;
     private requireUniform;
 }
+export {};
 //# sourceMappingURL=webgl-danmaku-renderer.d.ts.map

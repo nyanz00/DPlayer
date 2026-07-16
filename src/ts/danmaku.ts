@@ -4,6 +4,7 @@ import utils from './utils';
 import defaultApiBackend from './api';
 import * as DPlayerType from './types';
 import WebGLDanmakuRenderer, { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
+import WebGLDanmakuWorkerRenderer from './webgl-danmaku-worker-renderer';
 
 interface DanmakuOptions {
     player: DPlayer,
@@ -44,6 +45,7 @@ interface DanmakuTunnelItem {
 }
 
 interface CanvasDanmakuItem {
+    workerId: number,
     type: DPlayerType.DanmakuType,
     x: number,
     y: number,
@@ -87,8 +89,10 @@ class Danmaku {
     canvas: HTMLCanvasElement | null = null;
     canvasContext: CanvasRenderingContext2D | null = null;
     webglRenderer: WebGLDanmakuRenderer | null = null;
+    workerRenderer: WebGLDanmakuWorkerRenderer | null = null;
     canvasItems = new Set<CanvasDanmakuItem>();
     canvasPausedAt: number | null = null;
+    nextWorkerId = 1;
 
     constructor(options: DanmakuOptions) {
         this.options = options;
@@ -108,6 +112,10 @@ class Danmaku {
         this.containerWidth = this.container.clientWidth;
         this.containerHeight = this.container.clientHeight;
         if (this.usesSurfaceRenderer()) this.initCanvas();
+        this.events.on('destroy', () => {
+            this.workerRenderer?.destroy();
+            this.workerRenderer = null;
+        });
         this.load();
     }
 
@@ -245,6 +253,7 @@ class Danmaku {
         if (percentage !== undefined) {
             this.container.style.setProperty('--dplayer-danmaku-opacity', `${percentage}`);
             this._opacity = percentage;
+            this.workerRenderer?.opacity(percentage);
 
             this.events && this.events.trigger('danmaku_opacity', this._opacity);
         }
@@ -500,7 +509,30 @@ class Danmaku {
         };
 
         this.canvas = createCanvas();
-        if (this.options.renderMode === 'webgl') {
+        if (this.options.renderMode === 'webgl-worker') {
+            try {
+                const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+                this.workerRenderer = new WebGLDanmakuWorkerRenderer(this.canvas, {
+                    width: this.containerWidth,
+                    height: this.containerHeight,
+                    pixelRatio,
+                    opacity: this._opacity,
+                    debugMotion: this.options.debugMotion,
+                    onExpired: ids => this.removeExpiredWorkerItems(ids),
+                    onError: error => console.warn('[DPlayer] Danmaku Worker renderer failed.', error),
+                });
+            } catch (error) {
+                console.warn('[DPlayer] Worker WebGL danmaku is unavailable; falling back to main-thread WebGL.', error);
+                this.canvas = createCanvas();
+                try {
+                    this.webglRenderer = new WebGLDanmakuRenderer(this.canvas);
+                } catch (webglError) {
+                    console.warn('[DPlayer] WebGL danmaku is unavailable; falling back to Canvas.', webglError);
+                    this.canvas = createCanvas();
+                    this.canvasContext = this.canvas.getContext('2d', { alpha: true });
+                }
+            }
+        } else if (this.options.renderMode === 'webgl') {
             try {
                 this.webglRenderer = new WebGLDanmakuRenderer(this.canvas);
             } catch (error) {
@@ -518,6 +550,10 @@ class Danmaku {
     private resizeCanvas(): void {
         if (!this.canvas) return;
         const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+        if (this.workerRenderer) {
+            this.workerRenderer.resize(this.containerWidth, this.containerHeight, pixelRatio);
+            return;
+        }
         if (this.webglRenderer) {
             this.webglRenderer.resize(this.containerWidth, this.containerHeight, pixelRatio);
             return;
@@ -531,6 +567,10 @@ class Danmaku {
     }
 
     private clearCanvas(): void {
+        if (this.workerRenderer) {
+            this.workerRenderer.clear();
+            return;
+        }
         if (this.webglRenderer) {
             this.webglRenderer.clear();
             return;
@@ -602,12 +642,14 @@ class Danmaku {
                 const border = 'border' in source && Boolean(source.border);
                 const bitmap = this.createCanvasDanmakuBitmap(line, color, fontSize, border);
                 const webglSprite = this.webglRenderer?.createSprite(bitmap.canvas, bitmap.width, bitmap.height);
+                const workerId = this.nextWorkerId++;
                 const startX = type === 'right' ? danWidth : (danWidth - width) / 2;
                 const endX = type === 'right' ? -width : startX;
                 const y = type === 'bottom'
                     ? danHeight - itemHeight * (placement.lane + 1) - 8
                     : itemHeight * placement.lane + 8;
-                this.canvasItems.add({
+                const item: CanvasDanmakuItem = {
+                    workerId,
                     type,
                     x: startX,
                     y,
@@ -619,12 +661,26 @@ class Danmaku {
                     bitmapPadding: bitmap.padding,
                     webglSprite,
                     placement,
-                });
+                };
+                this.canvasItems.add(item);
+                this.workerRenderer?.add({
+                    id: workerId,
+                    type,
+                    startX,
+                    endX,
+                    y,
+                    width: bitmap.width,
+                    height: bitmap.height,
+                    padding: bitmap.padding,
+                    duration,
+                    elapsed: Math.max(0, performance.now() - placement.item.startedAt),
+                }, bitmap.canvas);
             }
         }
     }
 
     private renderCanvas(now: number): void {
+        if (this.workerRenderer) return;
         const context = this.canvasContext;
         if (!context && !this.webglRenderer) return;
         if (this.webglRenderer) this.webglRenderer.beginFrame(this._opacity);
@@ -726,6 +782,7 @@ class Danmaku {
 
     private removeCanvasItem(item: CanvasDanmakuItem): void {
         this.canvasItems.delete(item);
+        this.workerRenderer?.remove(item.workerId);
         this.webglRenderer?.deleteSprite(item.webglSprite);
         const lane = this.danTunnel[item.type][item.placement.lane + ''];
         if (!lane) return;
@@ -733,7 +790,15 @@ class Danmaku {
         if (index >= 0) lane.splice(index, 1);
     }
 
+    private removeExpiredWorkerItems(ids: number[]): void {
+        const expired = new Set(ids);
+        for (const item of [...this.canvasItems]) {
+            if (expired.has(item.workerId)) this.removeCanvasItem(item);
+        }
+    }
+
     play(): void {
+        this.workerRenderer?.play();
         if (this.usesSurfaceRenderer() && this.canvasPausedAt !== null) {
             const now = performance.now();
             const pausedDuration = now - this.canvasPausedAt;
@@ -749,6 +814,7 @@ class Danmaku {
 
     pause(): void {
         this.paused = true;
+        this.workerRenderer?.pause();
         if (this.usesSurfaceRenderer() && this.canvasPausedAt === null) {
             this.canvasPausedAt = performance.now();
         }
@@ -795,6 +861,7 @@ class Danmaku {
         if (this.usesSurfaceRenderer()) {
             for (const item of this.canvasItems) this.webglRenderer?.deleteSprite(item.webglSprite);
             this.canvasItems.clear();
+            this.workerRenderer?.clear();
             this.canvasPausedAt = this.paused ? performance.now() : null;
             if (this.canvas && this.canvas.parentNode !== this.container) this.container.appendChild(this.canvas);
             this.clearCanvas();
@@ -849,7 +916,9 @@ class Danmaku {
     }
 
     private usesSurfaceRenderer(): boolean {
-        return this.options.renderMode === 'canvas' || this.options.renderMode === 'webgl';
+        return this.options.renderMode === 'canvas'
+            || this.options.renderMode === 'webgl'
+            || this.options.renderMode === 'webgl-worker';
     }
 
     _danAnimation(position: DPlayerType.DanmakuType): string {
