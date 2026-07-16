@@ -54,6 +54,7 @@ interface CanvasDanmakuItem {
     bitmapHeight: number,
     bitmapPadding: number,
     webglSprite?: WebGLDanmakuSprite,
+    lastDrawX?: number,
     placement: DanmakuTunnelPlacement,
 }
 
@@ -662,6 +663,8 @@ class Danmaku {
             // looking like horizontal vibration while retaining smooth movement.
             const drawX = Math.round((item.x - item.bitmapPadding) * pixelRatio) / pixelRatio;
             const drawY = Math.round((item.y - item.bitmapPadding) * pixelRatio) / pixelRatio;
+            const motionRegressed = item.type === 'right' && item.lastDrawX !== undefined && drawX > item.lastDrawX;
+            item.lastDrawX = drawX;
             if (this.webglRenderer && item.webglSprite) {
                 this.webglRenderer.drawSprite(item.webglSprite, drawX, drawY);
                 if (this.options.debugMotion && item.type === 'right') {
@@ -669,12 +672,13 @@ class Danmaku {
                         drawX,
                         drawY + item.bitmapPadding,
                         item.bitmapHeight - item.bitmapPadding * 2,
+                        motionRegressed,
                     );
                 }
             } else if (context) {
                 context.drawImage(item.bitmap, drawX, drawY, item.bitmapWidth, item.bitmapHeight);
                 if (this.options.debugMotion && item.type === 'right') {
-                    context.fillStyle = '#ff2020';
+                    context.fillStyle = motionRegressed ? '#ffc714' : '#ff2020';
                     context.fillRect(
                         drawX - 7,
                         drawY + item.bitmapPadding,

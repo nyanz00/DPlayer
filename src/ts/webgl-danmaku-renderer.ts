@@ -43,7 +43,6 @@ export default class WebGLDanmakuRenderer {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         gl.disable(gl.DEPTH_TEST);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1);
 
         const white = document.createElement('canvas');
@@ -97,8 +96,9 @@ export default class WebGLDanmakuRenderer {
         this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
     }
 
-    drawDebugMarker(x: number, y: number, height: number): void {
-        this.drawSprite({ ...this.whiteSprite, width: 4, height: Math.max(8, height) }, x - 7, y, [1, 0.12, 0.12, 1]);
+    drawDebugMarker(x: number, y: number, height: number, regressed: boolean): void {
+        const color: [number, number, number, number] = regressed ? [1, 0.78, 0.08, 1] : [1, 0.12, 0.12, 1];
+        this.drawSprite({ ...this.whiteSprite, width: 4, height: Math.max(8, height) }, x - 7, y, color);
     }
 
     clear(): void {

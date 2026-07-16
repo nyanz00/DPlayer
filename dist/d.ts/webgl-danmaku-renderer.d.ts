@@ -20,7 +20,7 @@ export default class WebGLDanmakuRenderer {
     deleteSprite(sprite: WebGLDanmakuSprite | undefined): void;
     beginFrame(opacity: number): void;
     drawSprite(sprite: WebGLDanmakuSprite, x: number, y: number, color?: [number, number, number, number]): void;
-    drawDebugMarker(x: number, y: number, height: number): void;
+    drawDebugMarker(x: number, y: number, height: number, regressed: boolean): void;
     clear(): void;
     private createProgram;
     private compileShader;

@@ -48,6 +48,7 @@ interface CanvasDanmakuItem {
     bitmapHeight: number;
     bitmapPadding: number;
     webglSprite?: WebGLDanmakuSprite;
+    lastDrawX?: number;
     placement: DanmakuTunnelPlacement;
 }
 interface DanmakuTunnelPlacement {
