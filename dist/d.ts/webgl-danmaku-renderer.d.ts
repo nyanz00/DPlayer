@@ -14,13 +14,16 @@ export default class WebGLDanmakuRenderer {
     private readonly colorLocation;
     private readonly opacityLocation;
     private readonly whiteSprite;
+    private videoSprite;
     private pixelRatio;
+    private frameOpacity;
     constructor(canvas: WebGLDanmakuCanvas);
     resize(width: number, height: number, pixelRatio: number): void;
     createSprite(source: TexImageSource, width: number, height: number): WebGLDanmakuSprite;
     private createSolidSprite;
     deleteSprite(sprite: WebGLDanmakuSprite | undefined): void;
     beginFrame(opacity: number): void;
+    drawVideo(video: HTMLVideoElement, x: number, y: number, width: number, height: number): void;
     drawSprite(sprite: WebGLDanmakuSprite, x: number, y: number, color?: [number, number, number, number]): void;
     drawDebugMarker(x: number, y: number, height: number, regressed: boolean): void;
     clear(): void;

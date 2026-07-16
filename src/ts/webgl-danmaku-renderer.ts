@@ -15,7 +15,9 @@ export default class WebGLDanmakuRenderer {
     private readonly colorLocation: WebGLUniformLocation;
     private readonly opacityLocation: WebGLUniformLocation;
     private readonly whiteSprite: WebGLDanmakuSprite;
+    private videoSprite: WebGLDanmakuSprite | null = null;
     private pixelRatio = 1;
+    private frameOpacity = 1;
 
     constructor(private readonly canvas: WebGLDanmakuCanvas) {
         const gl = canvas.getContext('webgl', {
@@ -100,10 +102,34 @@ export default class WebGLDanmakuRenderer {
     }
 
     beginFrame(opacity: number): void {
+        this.frameOpacity = opacity;
         this.gl.clearColor(0, 0, 0, 0);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
         this.gl.useProgram(this.program);
         this.gl.uniform1f(this.opacityLocation, opacity);
+    }
+
+    drawVideo(video: HTMLVideoElement, x: number, y: number, width: number, height: number): void {
+        if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || video.videoWidth <= 0 || video.videoHeight <= 0) return;
+        if (!this.videoSprite) {
+            const texture = this.gl.createTexture();
+            if (!texture) throw new Error('Unable to create video texture');
+            this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
+            this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+            this.videoSprite = { texture, width, height };
+        }
+        this.videoSprite.width = width;
+        this.videoSprite.height = height;
+        this.gl.bindTexture(this.gl.TEXTURE_2D, this.videoSprite.texture);
+        this.gl.pixelStorei(this.gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 0);
+        this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, video);
+        this.gl.pixelStorei(this.gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1);
+        this.gl.uniform1f(this.opacityLocation, 1);
+        this.drawSprite(this.videoSprite, x, y);
+        this.gl.uniform1f(this.opacityLocation, this.frameOpacity);
     }
 
     drawSprite(sprite: WebGLDanmakuSprite, x: number, y: number, color: [number, number, number, number] = [1, 1, 1, 1]): void {

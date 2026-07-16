@@ -93,6 +93,8 @@ class Danmaku {
     canvasItems = new Set<CanvasDanmakuItem>();
     canvasPausedAt: number | null = null;
     nextWorkerId = 1;
+    compositeVideos = new Set<HTMLVideoElement>();
+    compositeFailed = false;
 
     constructor(options: DanmakuOptions) {
         this.options = options;
@@ -115,6 +117,7 @@ class Danmaku {
         this.events.on('destroy', () => {
             this.workerRenderer?.destroy();
             this.workerRenderer = null;
+            this.restoreCompositeVideos();
         });
         this.load();
     }
@@ -532,7 +535,7 @@ class Danmaku {
                     this.canvasContext = this.canvas.getContext('2d', { alpha: true });
                 }
             }
-        } else if (this.options.renderMode === 'webgl') {
+        } else if (this.options.renderMode === 'webgl' || this.options.renderMode === 'webgl-composite') {
             try {
                 this.webglRenderer = new WebGLDanmakuRenderer(this.canvas);
             } catch (error) {
@@ -683,7 +686,10 @@ class Danmaku {
         if (this.workerRenderer) return;
         const context = this.canvasContext;
         if (!context && !this.webglRenderer) return;
-        if (this.webglRenderer) this.webglRenderer.beginFrame(this._opacity);
+        if (this.webglRenderer) {
+            this.webglRenderer.beginFrame(this._opacity);
+            if (this.options.renderMode === 'webgl-composite' && !this.compositeFailed) this.renderCompositeVideo();
+        }
         else {
             this.clearCanvas();
             context!.globalAlpha = this._opacity;
@@ -745,6 +751,33 @@ class Danmaku {
             }
         }
         if (context) context.globalAlpha = 1;
+    }
+
+    private renderCompositeVideo(): void {
+        if (!this.webglRenderer) return;
+        const video = this.player.video;
+        if (!video || video.videoWidth <= 0 || video.videoHeight <= 0) return;
+        try {
+            const scale = Math.min(this.containerWidth / video.videoWidth, this.containerHeight / video.videoHeight);
+            const width = video.videoWidth * scale;
+            const height = video.videoHeight * scale;
+            const x = (this.containerWidth - width) / 2;
+            const y = (this.containerHeight - height) / 2;
+            this.webglRenderer.drawVideo(video, x, y, width, height);
+            if (!this.compositeVideos.has(video)) {
+                this.compositeVideos.add(video);
+                video.style.opacity = '0';
+            }
+        } catch (error) {
+            this.compositeFailed = true;
+            this.restoreCompositeVideos();
+            console.warn('[DPlayer] Video and danmaku WebGL composition failed; keeping the native video layer.', error);
+        }
+    }
+
+    private restoreCompositeVideos(): void {
+        for (const video of this.compositeVideos) video.style.removeProperty('opacity');
+        this.compositeVideos.clear();
     }
 
     private createCanvasDanmakuBitmap(
@@ -918,7 +951,8 @@ class Danmaku {
     private usesSurfaceRenderer(): boolean {
         return this.options.renderMode === 'canvas'
             || this.options.renderMode === 'webgl'
-            || this.options.renderMode === 'webgl-worker';
+            || this.options.renderMode === 'webgl-worker'
+            || this.options.renderMode === 'webgl-composite';
     }
 
     _danAnimation(position: DPlayerType.DanmakuType): string {

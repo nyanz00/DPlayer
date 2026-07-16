@@ -90,6 +90,8 @@ declare class Danmaku {
     canvasItems: Set<CanvasDanmakuItem>;
     canvasPausedAt: number | null;
     nextWorkerId: number;
+    compositeVideos: Set<HTMLVideoElement>;
+    compositeFailed: boolean;
     constructor(options: DanmakuOptions);
     load(): void;
     reload(newAPI: DanmakuOptionsAPI): void;
@@ -115,6 +117,8 @@ declare class Danmaku {
     private clearCanvas;
     private drawCanvas;
     private renderCanvas;
+    private renderCompositeVideo;
+    private restoreCompositeVideos;
     private createCanvasDanmakuBitmap;
     private removeCanvasItem;
     private removeExpiredWorkerItems;
