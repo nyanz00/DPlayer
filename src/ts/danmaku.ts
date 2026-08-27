@@ -35,9 +35,9 @@ interface DanmakuTunnelItem {
     element: HTMLElement | null,
     width: number,
     startedAt: number,
+    startedMediaTime: number | null,
     duration: number,
     renderedElapsed?: number,
-    lastRenderedAt?: number,
 }
 
 interface CanvasDanmakuItem {
@@ -265,7 +265,7 @@ class Danmaku {
         try {
             this.webglRenderer = new WebGLDanmakuRenderer(this.canvas);
         } catch (error) {
-            console.warn('[DPlayer] WebGL video and danmaku composition is unavailable; falling back to Canvas comments.', error);
+            console.warn('[DPlayer] WebGL danmaku is unavailable; falling back to Canvas comments.', error);
             this.canvasContext = this.canvas.getContext('2d', { alpha: true });
         }
         this.container.appendChild(this.canvas);
@@ -322,7 +322,13 @@ class Danmaku {
 
         const getTunnel = (type: DPlayerType.DanmakuType, width: number, duration: number): DanmakuTunnelPlacement | null => {
             const now = performance.now();
-            const tunnelItem: DanmakuTunnelItem = { element: null, width, startedAt: now, duration };
+            const tunnelItem: DanmakuTunnelItem = {
+                element: null,
+                width,
+                startedAt: now,
+                startedMediaTime: this.getMediaTimeMilliseconds(),
+                duration,
+            };
             for (let i = 0; this.unlimited || i < laneCount; i++) {
                 const lane = this.danTunnel[type][i + ''];
                 if (lane?.length) {
@@ -393,23 +399,24 @@ class Danmaku {
             context!.globalAlpha = this._opacity;
         }
         const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+        const mediaTime = this.getMediaTimeMilliseconds();
 
         for (const item of [...this.canvasItems]) {
             const tunnelItem = item.placement.item;
-            const targetElapsed = Math.max(0, now - tunnelItem.startedAt);
-            const renderedElapsed = tunnelItem.renderedElapsed ?? 0;
-            const frameElapsed = tunnelItem.lastRenderedAt === undefined
-                ? Math.min(targetElapsed, 1000 / 60)
-                : Math.max(0, now - tunnelItem.lastRenderedAt);
-            // A throttled requestAnimationFrame used to jump straight to its absolute
-            // timestamp. Advance at a bounded rate and recover the delay gradually so
-            // another video or DWM stall cannot produce a large one-frame displacement.
-            const baseAdvance = Math.min(frameElapsed, 1000 / 30);
-            const delayed = Math.max(0, targetElapsed - renderedElapsed - baseAdvance);
-            const catchUp = Math.min(delayed * 0.12, baseAdvance * 0.25);
-            const elapsed = Math.min(targetElapsed, renderedElapsed + baseAdvance + catchUp);
+            const mediaElapsed = mediaTime !== null && tunnelItem.startedMediaTime !== null
+                ? mediaTime - tunnelItem.startedMediaTime
+                : null;
+            if (mediaElapsed !== null && mediaElapsed < (tunnelItem.renderedElapsed ?? 0) - 250) {
+                // A live reconnect or an unreported seek can reset the media clock.
+                // Do not make an already-visible comment move backwards across the screen.
+                this.removeCanvasItem(item);
+                continue;
+            }
+            const elapsed = Math.max(
+                tunnelItem.renderedElapsed ?? 0,
+                mediaElapsed === null ? now - tunnelItem.startedAt : mediaElapsed,
+            );
             tunnelItem.renderedElapsed = elapsed;
-            tunnelItem.lastRenderedAt = now;
             if (elapsed >= item.placement.item.duration) {
                 this.removeCanvasItem(item);
                 continue;
@@ -480,7 +487,6 @@ class Danmaku {
             const pausedDuration = now - this.canvasPausedAt;
             for (const item of this.canvasItems) {
                 item.placement.item.startedAt += pausedDuration;
-                item.placement.item.lastRenderedAt = now;
             }
             this.canvasPausedAt = null;
         }
@@ -492,6 +498,11 @@ class Danmaku {
         if (this.canvasPausedAt === null) {
             this.canvasPausedAt = performance.now();
         }
+    }
+
+    private getMediaTimeMilliseconds(): number | null {
+        const time = this.options.time();
+        return Number.isFinite(time) && time >= 0 ? time * 1000 : null;
     }
 
     _measure(text: string, itemFontSize: number): number {

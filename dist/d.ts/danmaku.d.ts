@@ -30,9 +30,9 @@ interface DanmakuTunnelItem {
     element: HTMLElement | null;
     width: number;
     startedAt: number;
+    startedMediaTime: number | null;
     duration: number;
     renderedElapsed?: number;
-    lastRenderedAt?: number;
 }
 interface CanvasDanmakuItem {
     type: DPlayerType.DanmakuType;
@@ -110,6 +110,7 @@ declare class Danmaku {
     private removeCanvasItem;
     play(): void;
     pause(): void;
+    private getMediaTimeMilliseconds;
     _measure(text: string, itemFontSize: number): number;
     seek(): void;
     clear(): void;
