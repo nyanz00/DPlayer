@@ -84,8 +84,6 @@ class Danmaku {
     webglRenderer: WebGLDanmakuRenderer | null = null;
     canvasItems = new Set<CanvasDanmakuItem>();
     canvasPausedAt: number | null = null;
-    compositeVideos = new Set<HTMLVideoElement>();
-    compositeFailed = false;
 
     constructor(options: DanmakuOptions) {
         this.options = options;
@@ -105,9 +103,6 @@ class Danmaku {
         this.containerWidth = this.container.clientWidth;
         this.containerHeight = this.container.clientHeight;
         this.initCanvas();
-        this.events.on('destroy', () => {
-            this.restoreCompositeVideos();
-        });
         this.load();
     }
 
@@ -392,7 +387,6 @@ class Danmaku {
         if (!context && !this.webglRenderer) return;
         if (this.webglRenderer) {
             this.webglRenderer.beginFrame(this._opacity);
-            if (!this.compositeFailed) this.renderCompositeVideo();
         }
         else {
             this.clearCanvas();
@@ -436,33 +430,6 @@ class Danmaku {
             }
         }
         if (context) context.globalAlpha = 1;
-    }
-
-    private renderCompositeVideo(): void {
-        if (!this.webglRenderer) return;
-        const video = this.player.video;
-        if (!video || video.videoWidth <= 0 || video.videoHeight <= 0) return;
-        try {
-            const scale = Math.min(this.containerWidth / video.videoWidth, this.containerHeight / video.videoHeight);
-            const width = video.videoWidth * scale;
-            const height = video.videoHeight * scale;
-            const x = (this.containerWidth - width) / 2;
-            const y = (this.containerHeight - height) / 2;
-            this.webglRenderer.drawVideo(video, x, y, width, height);
-            if (!this.compositeVideos.has(video)) {
-                this.compositeVideos.add(video);
-                video.style.opacity = '0';
-            }
-        } catch (error) {
-            this.compositeFailed = true;
-            this.restoreCompositeVideos();
-            console.warn('[DPlayer] Video and danmaku WebGL composition failed; keeping the native video layer.', error);
-        }
-    }
-
-    private restoreCompositeVideos(): void {
-        for (const video of this.compositeVideos) video.style.removeProperty('opacity');
-        this.compositeVideos.clear();
     }
 
     private createCanvasDanmakuBitmap(
