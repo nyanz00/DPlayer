@@ -4,6 +4,7 @@ import utils from './utils';
 import defaultApiBackend from './api';
 import * as DPlayerType from './types';
 import WebGLDanmakuRenderer, { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
+import WebGLDanmakuWorkerRenderer from './webgl-danmaku-worker-renderer';
 
 interface DanmakuOptions {
     player: DPlayer,
@@ -41,6 +42,7 @@ interface DanmakuTunnelItem {
 }
 
 interface CanvasDanmakuItem {
+    workerId: number,
     type: DPlayerType.DanmakuType,
     x: number,
     y: number,
@@ -82,8 +84,11 @@ class Danmaku {
     canvas: HTMLCanvasElement | null = null;
     canvasContext: CanvasRenderingContext2D | null = null;
     webglRenderer: WebGLDanmakuRenderer | null = null;
+    workerRenderer: WebGLDanmakuWorkerRenderer | null = null;
     canvasItems = new Set<CanvasDanmakuItem>();
     canvasPausedAt: number | null = null;
+    nextWorkerId = 1;
+    mediaWaiting = false;
 
     constructor(options: DanmakuOptions) {
         this.options = options;
@@ -103,6 +108,32 @@ class Danmaku {
         this.containerWidth = this.container.clientWidth;
         this.containerHeight = this.container.clientHeight;
         this.initCanvas();
+        this.events.on('destroy', () => {
+            this.workerRenderer?.destroy();
+            this.workerRenderer = null;
+        });
+        this.events.on('waiting', () => {
+            this.mediaWaiting = true;
+            this.syncWorkerClock(true);
+        });
+        this.events.on('seeking', () => {
+            this.mediaWaiting = true;
+            this.syncWorkerClock(true);
+        });
+        this.events.on('playing', () => {
+            this.mediaWaiting = false;
+            this.syncWorkerClock(true);
+        });
+        this.events.on('canplay', () => {
+            this.mediaWaiting = false;
+            this.syncWorkerClock(true);
+        });
+        this.events.on('seeked', () => {
+            this.mediaWaiting = false;
+            this.syncWorkerClock(true);
+        });
+        this.events.on('ratechange', () => this.syncWorkerClock(true));
+        this.events.on('ended', () => this.syncWorkerClock(true));
         this.load();
     }
 
@@ -238,6 +269,7 @@ class Danmaku {
         if (percentage !== undefined) {
             this.container.style.setProperty('--dplayer-danmaku-opacity', `${percentage}`);
             this._opacity = percentage;
+            this.workerRenderer?.opacity(percentage);
 
             this.events && this.events.trigger('danmaku_opacity', this._opacity);
         }
@@ -259,22 +291,64 @@ class Danmaku {
     }
 
     private initCanvas(): void {
-        this.canvas = document.createElement('canvas');
-        this.canvas.className = 'dplayer-danmaku-canvas';
-        this.canvas.setAttribute('aria-hidden', 'true');
+        this.canvas = this.createCanvas();
         try {
-            this.webglRenderer = new WebGLDanmakuRenderer(this.canvas);
+            this.workerRenderer = new WebGLDanmakuWorkerRenderer(this.canvas, {
+                width: this.containerWidth,
+                height: this.containerHeight,
+                pixelRatio: Math.min(2, Math.max(1, window.devicePixelRatio || 1)),
+                opacity: this._opacity,
+                onExpired: ids => this.removeExpiredWorkerItems(ids),
+                onError: error => this.fallbackFromWorker(error),
+            });
         } catch (error) {
-            console.warn('[DPlayer] WebGL danmaku is unavailable; falling back to Canvas comments.', error);
-            this.canvasContext = this.canvas.getContext('2d', { alpha: true });
+            console.warn('[DPlayer] Worker WebGL danmaku is unavailable; falling back to main-thread rendering.', error);
+            this.canvas = this.createCanvas();
+            this.initMainThreadRenderer(this.canvas);
         }
         this.container.appendChild(this.canvas);
+        this.resizeCanvas();
+        this.syncWorkerClock(true);
+    }
+
+    private createCanvas(): HTMLCanvasElement {
+        const canvas = document.createElement('canvas');
+        canvas.className = 'dplayer-danmaku-canvas';
+        canvas.setAttribute('aria-hidden', 'true');
+        return canvas;
+    }
+
+    private initMainThreadRenderer(canvas: HTMLCanvasElement): void {
+        try {
+            this.webglRenderer = new WebGLDanmakuRenderer(canvas);
+        } catch (error) {
+            console.warn('[DPlayer] WebGL danmaku is unavailable; falling back to Canvas comments.', error);
+            this.canvasContext = canvas.getContext('2d', { alpha: true });
+        }
+    }
+
+    private fallbackFromWorker(error: Error): void {
+        if (!this.workerRenderer || !this.canvas) return;
+        console.warn('[DPlayer] Danmaku Worker failed; falling back to main-thread rendering.', error);
+        this.workerRenderer.destroy();
+        this.workerRenderer = null;
+        const replacement = this.createCanvas();
+        this.canvas.replaceWith(replacement);
+        this.canvas = replacement;
+        this.initMainThreadRenderer(replacement);
+        for (const item of this.canvasItems) {
+            item.webglSprite = this.webglRenderer?.createSprite(item.bitmap, item.bitmapWidth, item.bitmapHeight);
+        }
         this.resizeCanvas();
     }
 
     private resizeCanvas(): void {
         if (!this.canvas) return;
         const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+        if (this.workerRenderer) {
+            this.workerRenderer.resize(this.containerWidth, this.containerHeight, pixelRatio);
+            return;
+        }
         if (this.webglRenderer) {
             this.webglRenderer.resize(this.containerWidth, this.containerHeight, pixelRatio);
             return;
@@ -288,6 +362,10 @@ class Danmaku {
     }
 
     private clearCanvas(): void {
+        if (this.workerRenderer) {
+            this.workerRenderer.clear();
+            return;
+        }
         if (this.webglRenderer) {
             this.webglRenderer.clear();
             return;
@@ -365,12 +443,14 @@ class Danmaku {
                 const border = 'border' in source && Boolean(source.border);
                 const bitmap = this.createCanvasDanmakuBitmap(line, color, fontSize, border);
                 const webglSprite = this.webglRenderer?.createSprite(bitmap.canvas, bitmap.width, bitmap.height);
+                const workerId = this.nextWorkerId++;
                 const startX = type === 'right' ? danWidth : (danWidth - width) / 2;
                 const endX = type === 'right' ? -width : startX;
                 const y = type === 'bottom'
                     ? danHeight - itemHeight * (placement.lane + 1) - 8
                     : itemHeight * placement.lane + 8;
                 const item: CanvasDanmakuItem = {
+                    workerId,
                     type,
                     x: startX,
                     y,
@@ -384,17 +464,35 @@ class Danmaku {
                     placement,
                 };
                 this.canvasItems.add(item);
+                const startedMediaTime = placement.item.startedMediaTime;
+                const mediaTime = this.getMediaTimeMilliseconds();
+                this.workerRenderer?.add({
+                    id: workerId,
+                    type,
+                    startX,
+                    endX,
+                    y,
+                    width: bitmap.width,
+                    height: bitmap.height,
+                    padding: bitmap.padding,
+                    duration,
+                    startedMediaTime,
+                    elapsed: mediaTime !== null && startedMediaTime !== null
+                        ? Math.max(0, mediaTime - startedMediaTime)
+                        : Math.max(0, performance.now() - placement.item.startedAt),
+                }, bitmap.canvas);
             }
         }
     }
 
     private renderCanvas(now: number): void {
+        if (this.workerRenderer) this.syncWorkerClock();
         const context = this.canvasContext;
-        if (!context && !this.webglRenderer) return;
-        if (this.webglRenderer) {
+        if (!this.workerRenderer && !context && !this.webglRenderer) return;
+        if (!this.workerRenderer && this.webglRenderer) {
             this.webglRenderer.beginFrame(this._opacity);
         }
-        else {
+        else if (!this.workerRenderer) {
             this.clearCanvas();
             context!.globalAlpha = this._opacity;
         }
@@ -430,7 +528,9 @@ class Danmaku {
             // looking like horizontal vibration while retaining smooth movement.
             const drawX = Math.round((item.x - item.bitmapPadding) * pixelRatio) / pixelRatio;
             const drawY = Math.round((item.y - item.bitmapPadding) * pixelRatio) / pixelRatio;
-            if (this.webglRenderer && item.webglSprite) {
+            if (this.workerRenderer) {
+                continue;
+            } else if (this.webglRenderer && item.webglSprite) {
                 this.webglRenderer.drawSprite(item.webglSprite, drawX, drawY);
             } else if (context) {
                 context.drawImage(item.bitmap, drawX, drawY, item.bitmapWidth, item.bitmapHeight);
@@ -474,11 +574,19 @@ class Danmaku {
 
     private removeCanvasItem(item: CanvasDanmakuItem): void {
         this.canvasItems.delete(item);
+        this.workerRenderer?.remove(item.workerId);
         this.webglRenderer?.deleteSprite(item.webglSprite);
         const lane = this.danTunnel[item.type][item.placement.lane + ''];
         if (!lane) return;
         const index = lane.indexOf(item.placement.item);
         if (index >= 0) lane.splice(index, 1);
+    }
+
+    private removeExpiredWorkerItems(ids: number[]): void {
+        const expired = new Set(ids);
+        for (const item of [...this.canvasItems]) {
+            if (expired.has(item.workerId)) this.removeCanvasItem(item);
+        }
     }
 
     play(): void {
@@ -491,6 +599,7 @@ class Danmaku {
             this.canvasPausedAt = null;
         }
         this.paused = false;
+        this.syncWorkerClock(true);
     }
 
     pause(): void {
@@ -498,11 +607,23 @@ class Danmaku {
         if (this.canvasPausedAt === null) {
             this.canvasPausedAt = performance.now();
         }
+        this.syncWorkerClock(true);
     }
 
     private getMediaTimeMilliseconds(): number | null {
         const time = this.options.time();
         return Number.isFinite(time) && time >= 0 ? time * 1000 : null;
+    }
+
+    private syncWorkerClock(force = false): void {
+        const video = this.player.video;
+        const playing = !this.paused
+            && !this.mediaWaiting
+            && !video.paused
+            && !video.ended
+            && !video.seeking
+            && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+        this.workerRenderer?.syncClock(this.getMediaTimeMilliseconds(), playing, video.playbackRate, force);
     }
 
     _measure(text: string, itemFontSize: number): number {

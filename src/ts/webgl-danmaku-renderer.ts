@@ -4,6 +4,8 @@ export interface WebGLDanmakuSprite {
     height: number,
 }
 
+type WebGLDanmakuCanvas = HTMLCanvasElement | OffscreenCanvas;
+
 export default class WebGLDanmakuRenderer {
     private readonly gl: WebGLRenderingContext;
     private readonly program: WebGLProgram;
@@ -14,7 +16,7 @@ export default class WebGLDanmakuRenderer {
     private readonly opacityLocation: WebGLUniformLocation;
     private pixelRatio = 1;
 
-    constructor(private readonly canvas: HTMLCanvasElement) {
+    constructor(private readonly canvas: WebGLDanmakuCanvas) {
         const gl = canvas.getContext('webgl', {
             alpha: true,
             antialias: false,
