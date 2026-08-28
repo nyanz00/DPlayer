@@ -6,6 +6,9 @@ import * as DPlayerType from './types';
 import WebGLDanmakuRenderer, { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
 import WebGLDanmakuWorkerRenderer from './webgl-danmaku-worker-renderer';
 
+const MAX_DANMAKU_RENDER_WIDTH = 1920;
+const MAX_DANMAKU_RENDER_HEIGHT = 1080;
+
 interface DanmakuOptions {
     player: DPlayer,
     container: HTMLElement,
@@ -290,13 +293,24 @@ class Danmaku {
         return null;
     }
 
+    private getCanvasPixelRatio(): number {
+        const devicePixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+        const widthRatio = this.containerWidth > 0 ? MAX_DANMAKU_RENDER_WIDTH / this.containerWidth : devicePixelRatio;
+        const heightRatio = this.containerHeight > 0 ? MAX_DANMAKU_RENDER_HEIGHT / this.containerHeight : devicePixelRatio;
+
+        // Keep layout, lanes, and motion in CSS pixels while limiting only the
+        // backing canvas resolution. This avoids 4K rasterization cost without
+        // changing where comments are placed on screen.
+        return Math.max(0.01, Math.min(devicePixelRatio, widthRatio, heightRatio));
+    }
+
     private initCanvas(): void {
         this.canvas = this.createCanvas();
         try {
             this.workerRenderer = new WebGLDanmakuWorkerRenderer(this.canvas, {
                 width: this.containerWidth,
                 height: this.containerHeight,
-                pixelRatio: Math.min(2, Math.max(1, window.devicePixelRatio || 1)),
+                pixelRatio: this.getCanvasPixelRatio(),
                 opacity: this._opacity,
                 onExpired: ids => this.removeExpiredWorkerItems(ids),
                 onError: error => this.fallbackFromWorker(error),
@@ -344,7 +358,7 @@ class Danmaku {
 
     private resizeCanvas(): void {
         if (!this.canvas) return;
-        const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+        const pixelRatio = this.getCanvasPixelRatio();
         if (this.workerRenderer) {
             this.workerRenderer.resize(this.containerWidth, this.containerHeight, pixelRatio);
             return;
@@ -496,7 +510,7 @@ class Danmaku {
             this.clearCanvas();
             context!.globalAlpha = this._opacity;
         }
-        const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+        const pixelRatio = this.getCanvasPixelRatio();
         const mediaTime = this.getMediaTimeMilliseconds();
 
         for (const item of [...this.canvasItems]) {
@@ -545,7 +559,7 @@ class Danmaku {
         fontSize: number,
         border: boolean,
     ): { canvas: HTMLCanvasElement, width: number, height: number, padding: number } {
-        const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+        const pixelRatio = this.getCanvasPixelRatio();
         const padding = Math.ceil(Math.max(4, fontSize * 0.1));
         const textWidth = this._measure(text, fontSize);
         const width = Math.max(1, Math.ceil(textWidth + padding * 2));

@@ -106,6 +106,7 @@ declare class Danmaku {
      * size - danmaku size, `medium` `big` `small`, default: `medium`
      */
     draw(dan: DPlayerType.DanmakuItem | DPlayerType.DanmakuItem[] | DPlayerType.Dan[]): DocumentFragment | null;
+    private getCanvasPixelRatio;
     private initCanvas;
     private createCanvas;
     private initMainThreadRenderer;
