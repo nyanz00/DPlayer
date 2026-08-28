@@ -1,5 +1,5 @@
 import WebGLDanmakuRenderer, { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
-import { WebGLDanmakuWorkerInput, WebGLDanmakuWorkerOutput, WorkerDanmakuItem } from './webgl-danmaku-worker-protocol';
+import { WebGLDanmakuWorkerInput, WebGLDanmakuWorkerOutput, WorkerDanmakuItem, WorkerFrameTiming } from './webgl-danmaku-worker-protocol';
 
 interface ActiveItem extends WorkerDanmakuItem {
     sprite: WebGLDanmakuSprite,
@@ -15,7 +15,7 @@ interface WorkerScope {
 }
 
 const scope = globalThis as unknown as WorkerScope;
-const FRAME_INTERVAL = 1000 / 60;
+const DEFAULT_FRAME_INTERVAL = 1000 / 60;
 const items = new Map<number, ActiveItem>();
 let renderer: WebGLDanmakuRenderer | null = null;
 let opacity = 1;
@@ -27,6 +27,9 @@ let playbackRate = 1;
 let lastSampledMediaTime: number | null = null;
 let scheduled = false;
 let nextRenderAt = 0;
+let frameDivisor: number | null = null;
+let frameInterval = DEFAULT_FRAME_INTERVAL;
+let framesUntilRender = 0;
 
 const post = (message: WebGLDanmakuWorkerOutput): void => scope.postMessage(message);
 
@@ -40,19 +43,35 @@ const scheduleFrame = (): void => {
     scheduled = true;
     const callback = (now: number): void => {
         scheduled = false;
-        if (nextRenderAt === 0 || now >= nextRenderAt) {
+        const shouldRender = scope.requestAnimationFrame && frameDivisor !== null
+            ? framesUntilRender === 0
+            : nextRenderAt === 0 || now >= nextRenderAt;
+        if (shouldRender) {
             render(now);
-            if (nextRenderAt === 0) nextRenderAt = now + FRAME_INTERVAL;
-            else {
-                do {
-                    nextRenderAt += FRAME_INTERVAL;
-                } while (nextRenderAt <= now);
+            if (scope.requestAnimationFrame && frameDivisor !== null) {
+                framesUntilRender = frameDivisor - 1;
+            } else {
+                if (nextRenderAt === 0) nextRenderAt = now + frameInterval;
+                else {
+                    do {
+                        nextRenderAt += frameInterval;
+                    } while (nextRenderAt <= now);
+                }
             }
+        } else if (scope.requestAnimationFrame && frameDivisor !== null) {
+            framesUntilRender--;
         }
         if (items.size > 0) scheduleFrame();
     };
     if (scope.requestAnimationFrame) scope.requestAnimationFrame(callback);
-    else scope.setTimeout(() => callback(performance.now()), 16);
+    else scope.setTimeout(() => callback(performance.now()), frameInterval);
+};
+
+const setFrameTiming = (timing: WorkerFrameTiming): void => {
+    frameDivisor = timing.frameDivisor;
+    frameInterval = timing.frameInterval;
+    framesUntilRender = 0;
+    nextRenderAt = 0;
 };
 
 const deleteItem = (id: number): void => {
@@ -109,6 +128,7 @@ scope.onmessage = (event): void => {
         const message = event.data;
         switch (message.type) {
         case 'init':
+            setFrameTiming(message.frameTiming);
             renderer = new WebGLDanmakuRenderer(message.canvas);
             pixelRatio = message.pixelRatio;
             opacity = message.opacity;
@@ -166,6 +186,9 @@ scope.onmessage = (event): void => {
             lastSampledMediaTime = message.mediaTime;
             break;
         }
+        case 'frameTiming':
+            setFrameTiming(message.value);
+            break;
         case 'clear':
             for (const id of [...items.keys()]) deleteItem(id);
             renderer?.clear();

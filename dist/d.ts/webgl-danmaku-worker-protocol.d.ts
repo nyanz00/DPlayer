@@ -11,6 +11,10 @@ export interface WorkerDanmakuItem {
     startedMediaTime: number | null;
     elapsed: number;
 }
+export interface WorkerFrameTiming {
+    frameDivisor: number | null;
+    frameInterval: number;
+}
 export type WebGLDanmakuWorkerInput = {
     type: 'init';
     canvas: OffscreenCanvas;
@@ -18,6 +22,7 @@ export type WebGLDanmakuWorkerInput = {
     height: number;
     pixelRatio: number;
     opacity: number;
+    frameTiming: WorkerFrameTiming;
 } | {
     type: 'add';
     item: WorkerDanmakuItem;
@@ -39,6 +44,9 @@ export type WebGLDanmakuWorkerInput = {
     sampledAt: number;
     playing: boolean;
     playbackRate: number;
+} | {
+    type: 'frameTiming';
+    value: WorkerFrameTiming;
 } | {
     type: 'clear';
 };

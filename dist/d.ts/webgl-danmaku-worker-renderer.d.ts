@@ -1,9 +1,10 @@
-import { WorkerDanmakuItem } from './webgl-danmaku-worker-protocol';
+import { WorkerDanmakuItem, WorkerFrameTiming } from './webgl-danmaku-worker-protocol';
 interface WorkerRendererOptions {
     width: number;
     height: number;
     pixelRatio: number;
     opacity: number;
+    frameTiming: WorkerFrameTiming;
     onExpired: (ids: number[]) => void;
     onError: (error: Error) => void;
 }
@@ -19,6 +20,7 @@ export default class WebGLDanmakuWorkerRenderer {
     remove(id: number): void;
     resize(width: number, height: number, pixelRatio: number): void;
     opacity(value: number): void;
+    frameTiming(value: WorkerFrameTiming): void;
     syncClock(mediaTime: number | null, playing: boolean, playbackRate: number, force?: boolean): void;
     clear(): void;
     destroy(): void;

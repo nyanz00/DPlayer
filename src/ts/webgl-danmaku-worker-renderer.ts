@@ -1,4 +1,4 @@
-import { WebGLDanmakuWorkerInput, WebGLDanmakuWorkerOutput, WorkerDanmakuItem } from './webgl-danmaku-worker-protocol';
+import { WebGLDanmakuWorkerInput, WebGLDanmakuWorkerOutput, WorkerDanmakuItem, WorkerFrameTiming } from './webgl-danmaku-worker-protocol';
 import DanmakuWorker from 'worker-loader?inline=no-fallback!./webgl-danmaku-worker';
 
 interface WorkerRendererOptions {
@@ -6,6 +6,7 @@ interface WorkerRendererOptions {
     height: number,
     pixelRatio: number,
     opacity: number,
+    frameTiming: WorkerFrameTiming,
     onExpired: (ids: number[]) => void,
     onError: (error: Error) => void,
 }
@@ -43,6 +44,7 @@ export default class WebGLDanmakuWorkerRenderer {
                 height: options.height,
                 pixelRatio: options.pixelRatio,
                 opacity: options.opacity,
+                frameTiming: options.frameTiming,
             }, [offscreen]);
         } catch (error) {
             this.destroy();
@@ -72,6 +74,10 @@ export default class WebGLDanmakuWorkerRenderer {
 
     opacity(value: number): void {
         this.post({ type: 'opacity', value });
+    }
+
+    frameTiming(value: WorkerFrameTiming): void {
+        this.post({ type: 'frameTiming', value });
     }
 
     syncClock(mediaTime: number | null, playing: boolean, playbackRate: number, force = false): void {

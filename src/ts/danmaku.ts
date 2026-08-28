@@ -5,6 +5,7 @@ import defaultApiBackend from './api';
 import * as DPlayerType from './types';
 import WebGLDanmakuRenderer, { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
 import WebGLDanmakuWorkerRenderer from './webgl-danmaku-worker-renderer';
+import { DisplayRefreshTiming, sampleDisplayRefreshFrame, subscribeDisplayRefreshTiming } from './display-refresh-rate';
 
 const DANMAKU_FRAME_INTERVAL = 1000 / 60;
 
@@ -96,6 +97,10 @@ class Danmaku {
     nextWorkerId = 1;
     mediaWaiting = false;
     nextCanvasRenderAt = 0;
+    canvasFrameDivisor: number | null = null;
+    canvasFrameInterval = DANMAKU_FRAME_INTERVAL;
+    canvasFramesUntilRender = 0;
+    unsubscribeDisplayRefreshTiming: (() => void) | null = null;
 
     constructor(options: DanmakuOptions) {
         this.options = options;
@@ -115,8 +120,13 @@ class Danmaku {
         this.options.highRefreshRate = this.options.highRefreshRate && typeof this.container.animate === 'function';
         this.containerWidth = this.container.clientWidth;
         this.containerHeight = this.container.clientHeight;
-        if (!this.options.highRefreshRate) this.initCanvas();
+        if (!this.options.highRefreshRate) {
+            this.unsubscribeDisplayRefreshTiming = subscribeDisplayRefreshTiming(timing => this.updateDisplayRefreshTiming(timing));
+            this.initCanvas();
+        }
         this.events.on('destroy', () => {
+            this.unsubscribeDisplayRefreshTiming?.();
+            this.unsubscribeDisplayRefreshTiming = null;
             this.workerRenderer?.destroy();
             this.workerRenderer = null;
             this.destroyCompositorItems();
@@ -176,8 +186,8 @@ class Danmaku {
 
         this._readAllEndpoints(endpoints, (results) => {
             this.dan = ([] as DPlayerType.Dan[]).concat(...results).sort((a, b) => a.time - b.time);
-            window.requestAnimationFrame(() => {
-                this.frame();
+            window.requestAnimationFrame(now => {
+                this.frame(now);
             });
 
             this.options.callback();
@@ -269,7 +279,8 @@ class Danmaku {
         });
     }
 
-    frame(): void {
+    frame(now: number): void {
+        if (!this.options.highRefreshRate) sampleDisplayRefreshFrame(now);
         if (this.dan.length && !this.paused && this.showing) {
             let item = this.dan[this.danIndex];
             const dan = [];
@@ -279,9 +290,9 @@ class Danmaku {
             }
             this.draw(dan);
         }
-        this.renderCanvas(this.paused && this.canvasPausedAt !== null ? this.canvasPausedAt : performance.now());
-        window.requestAnimationFrame(() => {
-            this.frame();
+        this.renderCanvas(this.paused && this.canvasPausedAt !== null ? this.canvasPausedAt : now);
+        window.requestAnimationFrame(nextFrameAt => {
+            this.frame(nextFrameAt);
         });
     }
 
@@ -318,6 +329,10 @@ class Danmaku {
                 height: this.containerHeight,
                 pixelRatio: Math.min(2, Math.max(1, window.devicePixelRatio || 1)),
                 opacity: this._opacity,
+                frameTiming: {
+                    frameDivisor: this.canvasFrameDivisor,
+                    frameInterval: this.canvasFrameInterval,
+                },
                 onExpired: ids => this.removeExpiredWorkerItems(ids),
                 onError: error => this.fallbackFromWorker(error),
             });
@@ -545,15 +560,23 @@ class Danmaku {
         }
         if (this.canvasItems.size === 0) {
             this.nextCanvasRenderAt = 0;
+            this.canvasFramesUntilRender = 0;
             return;
         }
-        const frameNow = performance.now();
-        if (this.nextCanvasRenderAt !== 0 && frameNow < this.nextCanvasRenderAt) return;
-        if (this.nextCanvasRenderAt === 0) this.nextCanvasRenderAt = frameNow + DANMAKU_FRAME_INTERVAL;
-        else {
-            do {
-                this.nextCanvasRenderAt += DANMAKU_FRAME_INTERVAL;
-            } while (this.nextCanvasRenderAt <= frameNow);
+        if (this.canvasFrameDivisor !== null) {
+            if (this.canvasFramesUntilRender > 0) {
+                this.canvasFramesUntilRender--;
+                return;
+            }
+            this.canvasFramesUntilRender = this.canvasFrameDivisor - 1;
+        } else {
+            if (this.nextCanvasRenderAt !== 0 && now < this.nextCanvasRenderAt) return;
+            if (this.nextCanvasRenderAt === 0) this.nextCanvasRenderAt = now + this.canvasFrameInterval;
+            else {
+                do {
+                    this.nextCanvasRenderAt += this.canvasFrameInterval;
+                } while (this.nextCanvasRenderAt <= now);
+            }
         }
         const context = this.canvasContext;
         if (!context && !this.webglRenderer) return;
@@ -603,6 +626,17 @@ class Danmaku {
             }
         }
         if (context) context.globalAlpha = 1;
+    }
+
+    private updateDisplayRefreshTiming(timing: DisplayRefreshTiming | null): void {
+        this.canvasFrameDivisor = timing?.frameDivisor ?? null;
+        this.canvasFrameInterval = timing?.frameInterval ?? DANMAKU_FRAME_INTERVAL;
+        this.canvasFramesUntilRender = 0;
+        this.nextCanvasRenderAt = 0;
+        this.workerRenderer?.frameTiming({
+            frameDivisor: this.canvasFrameDivisor,
+            frameInterval: this.canvasFrameInterval,
+        });
     }
 
     private createCanvasDanmakuBitmap(

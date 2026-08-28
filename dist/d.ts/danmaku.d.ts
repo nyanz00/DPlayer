@@ -91,6 +91,10 @@ declare class Danmaku {
     nextWorkerId: number;
     mediaWaiting: boolean;
     nextCanvasRenderAt: number;
+    canvasFrameDivisor: number | null;
+    canvasFrameInterval: number;
+    canvasFramesUntilRender: number;
+    unsubscribeDisplayRefreshTiming: (() => void) | null;
     constructor(options: DanmakuOptions);
     load(): void;
     reload(newAPI: DanmakuOptionsAPI): void;
@@ -99,7 +103,7 @@ declare class Danmaku {
      */
     _readAllEndpoints(endpoints: string[], callback: (results: DPlayerType.Dan[][]) => void): void;
     send(dan: DPlayerType.DanmakuItem, callback: () => void, isCallbackOnError?: boolean): void;
-    frame(): void;
+    frame(now: number): void;
     opacity(percentage?: number): number;
     /**
      * Push a danmaku into DPlayer
@@ -120,6 +124,7 @@ declare class Danmaku {
     private drawCanvas;
     private startCompositorAnimation;
     private renderCanvas;
+    private updateDisplayRefreshTiming;
     private createCanvasDanmakuBitmap;
     private removeCanvasItem;
     private removeExpiredWorkerItems;
