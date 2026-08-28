@@ -15,6 +15,7 @@ interface WorkerScope {
 }
 
 const scope = globalThis as unknown as WorkerScope;
+const FRAME_INTERVAL = 1000 / 60;
 const items = new Map<number, ActiveItem>();
 let renderer: WebGLDanmakuRenderer | null = null;
 let opacity = 1;
@@ -25,6 +26,7 @@ let mediaPlaying = false;
 let playbackRate = 1;
 let lastSampledMediaTime: number | null = null;
 let scheduled = false;
+let nextRenderAt = 0;
 
 const post = (message: WebGLDanmakuWorkerOutput): void => scope.postMessage(message);
 
@@ -38,7 +40,15 @@ const scheduleFrame = (): void => {
     scheduled = true;
     const callback = (now: number): void => {
         scheduled = false;
-        render(now);
+        if (nextRenderAt === 0 || now >= nextRenderAt) {
+            render(now);
+            if (nextRenderAt === 0) nextRenderAt = now + FRAME_INTERVAL;
+            else {
+                do {
+                    nextRenderAt += FRAME_INTERVAL;
+                } while (nextRenderAt <= now);
+            }
+        }
         if (items.size > 0) scheduleFrame();
     };
     if (scope.requestAnimationFrame) scope.requestAnimationFrame(callback);
@@ -55,6 +65,7 @@ const deleteItem = (id: number): void => {
 const expireAll = (): void => {
     const expired = [...items.keys()];
     expired.forEach(deleteItem);
+    if (items.size === 0) nextRenderAt = 0;
     if (expired.length) post({ type: 'expired', ids: expired });
 };
 
@@ -88,6 +99,7 @@ const render = (now: number): void => {
 
     if (expired.length) {
         expired.forEach(deleteItem);
+        if (items.size === 0) nextRenderAt = 0;
         post({ type: 'expired', ids: expired });
     }
 };
@@ -123,7 +135,10 @@ scope.onmessage = (event): void => {
         }
         case 'remove':
             deleteItem(message.id);
-            if (items.size === 0) renderer?.clear();
+            if (items.size === 0) {
+                nextRenderAt = 0;
+                renderer?.clear();
+            }
             break;
         case 'resize':
             pixelRatio = message.pixelRatio;
@@ -155,6 +170,7 @@ scope.onmessage = (event): void => {
             for (const id of [...items.keys()]) deleteItem(id);
             renderer?.clear();
             lastSampledMediaTime = null;
+            nextRenderAt = 0;
             break;
         }
     } catch (error) {

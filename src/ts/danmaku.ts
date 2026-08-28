@@ -6,8 +6,7 @@ import * as DPlayerType from './types';
 import WebGLDanmakuRenderer, { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
 import WebGLDanmakuWorkerRenderer from './webgl-danmaku-worker-renderer';
 
-const MAX_DANMAKU_RENDER_WIDTH = 1920;
-const MAX_DANMAKU_RENDER_HEIGHT = 1080;
+const DANMAKU_FRAME_INTERVAL = 1000 / 60;
 
 interface DanmakuOptions {
     player: DPlayer,
@@ -92,6 +91,7 @@ class Danmaku {
     canvasPausedAt: number | null = null;
     nextWorkerId = 1;
     mediaWaiting = false;
+    nextCanvasRenderAt = 0;
 
     constructor(options: DanmakuOptions) {
         this.options = options;
@@ -293,24 +293,13 @@ class Danmaku {
         return null;
     }
 
-    private getCanvasPixelRatio(): number {
-        const devicePixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
-        const widthRatio = this.containerWidth > 0 ? MAX_DANMAKU_RENDER_WIDTH / this.containerWidth : devicePixelRatio;
-        const heightRatio = this.containerHeight > 0 ? MAX_DANMAKU_RENDER_HEIGHT / this.containerHeight : devicePixelRatio;
-
-        // Keep layout, lanes, and motion in CSS pixels while limiting only the
-        // backing canvas resolution. This avoids 4K rasterization cost without
-        // changing where comments are placed on screen.
-        return Math.max(0.01, Math.min(devicePixelRatio, widthRatio, heightRatio));
-    }
-
     private initCanvas(): void {
         this.canvas = this.createCanvas();
         try {
             this.workerRenderer = new WebGLDanmakuWorkerRenderer(this.canvas, {
                 width: this.containerWidth,
                 height: this.containerHeight,
-                pixelRatio: this.getCanvasPixelRatio(),
+                pixelRatio: Math.min(2, Math.max(1, window.devicePixelRatio || 1)),
                 opacity: this._opacity,
                 onExpired: ids => this.removeExpiredWorkerItems(ids),
                 onError: error => this.fallbackFromWorker(error),
@@ -358,7 +347,7 @@ class Danmaku {
 
     private resizeCanvas(): void {
         if (!this.canvas) return;
-        const pixelRatio = this.getCanvasPixelRatio();
+        const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
         if (this.workerRenderer) {
             this.workerRenderer.resize(this.containerWidth, this.containerHeight, pixelRatio);
             return;
@@ -500,17 +489,32 @@ class Danmaku {
     }
 
     private renderCanvas(now: number): void {
-        if (this.workerRenderer) this.syncWorkerClock();
+        if (this.workerRenderer) {
+            this.syncWorkerClock();
+            return;
+        }
+        if (this.canvasItems.size === 0) {
+            this.nextCanvasRenderAt = 0;
+            return;
+        }
+        const frameNow = performance.now();
+        if (this.nextCanvasRenderAt !== 0 && frameNow < this.nextCanvasRenderAt) return;
+        if (this.nextCanvasRenderAt === 0) this.nextCanvasRenderAt = frameNow + DANMAKU_FRAME_INTERVAL;
+        else {
+            do {
+                this.nextCanvasRenderAt += DANMAKU_FRAME_INTERVAL;
+            } while (this.nextCanvasRenderAt <= frameNow);
+        }
         const context = this.canvasContext;
-        if (!this.workerRenderer && !context && !this.webglRenderer) return;
-        if (!this.workerRenderer && this.webglRenderer) {
+        if (!context && !this.webglRenderer) return;
+        if (this.webglRenderer) {
             this.webglRenderer.beginFrame(this._opacity);
         }
-        else if (!this.workerRenderer) {
+        else {
             this.clearCanvas();
             context!.globalAlpha = this._opacity;
         }
-        const pixelRatio = this.getCanvasPixelRatio();
+        const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
         const mediaTime = this.getMediaTimeMilliseconds();
 
         for (const item of [...this.canvasItems]) {
@@ -542,9 +546,7 @@ class Danmaku {
             // looking like horizontal vibration while retaining smooth movement.
             const drawX = Math.round((item.x - item.bitmapPadding) * pixelRatio) / pixelRatio;
             const drawY = Math.round((item.y - item.bitmapPadding) * pixelRatio) / pixelRatio;
-            if (this.workerRenderer) {
-                continue;
-            } else if (this.webglRenderer && item.webglSprite) {
+            if (this.webglRenderer && item.webglSprite) {
                 this.webglRenderer.drawSprite(item.webglSprite, drawX, drawY);
             } else if (context) {
                 context.drawImage(item.bitmap, drawX, drawY, item.bitmapWidth, item.bitmapHeight);
@@ -559,7 +561,7 @@ class Danmaku {
         fontSize: number,
         border: boolean,
     ): { canvas: HTMLCanvasElement, width: number, height: number, padding: number } {
-        const pixelRatio = this.getCanvasPixelRatio();
+        const pixelRatio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
         const padding = Math.ceil(Math.max(4, fontSize * 0.1));
         const textWidth = this._measure(text, fontSize);
         const width = Math.max(1, Math.ceil(textWidth + padding * 2));

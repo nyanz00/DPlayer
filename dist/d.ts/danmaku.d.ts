@@ -86,6 +86,7 @@ declare class Danmaku {
     canvasPausedAt: number | null;
     nextWorkerId: number;
     mediaWaiting: boolean;
+    nextCanvasRenderAt: number;
     constructor(options: DanmakuOptions);
     load(): void;
     reload(newAPI: DanmakuOptionsAPI): void;
@@ -106,7 +107,6 @@ declare class Danmaku {
      * size - danmaku size, `medium` `big` `small`, default: `medium`
      */
     draw(dan: DPlayerType.DanmakuItem | DPlayerType.DanmakuItem[] | DPlayerType.Dan[]): DocumentFragment | null;
-    private getCanvasPixelRatio;
     private initCanvas;
     private createCanvas;
     private initMainThreadRenderer;
