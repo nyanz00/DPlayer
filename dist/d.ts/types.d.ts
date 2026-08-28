@@ -355,6 +355,11 @@ export interface Danmaku {
      */
     fontSize?: number;
     /**
+     * @description animate rasterized danmaku as individual compositor layers instead of using the shared canvas renderer
+     * @default false
+     */
+    highRefreshRate?: boolean;
+    /**
      * @description close comment form after send danmaku
      * @default true
      */
@@ -465,6 +470,7 @@ export interface DanmakuInternal {
     unlimited?: boolean;
     speedRate: number;
     fontSize: number;
+    highRefreshRate: boolean;
     closeCommentFormAfterSend: boolean;
 }
 export interface Plugins {
