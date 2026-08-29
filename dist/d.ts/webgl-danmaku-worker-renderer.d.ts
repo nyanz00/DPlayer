@@ -5,6 +5,7 @@ interface WorkerRendererOptions {
     pixelRatio: number;
     opacity: number;
     frameTiming: WorkerFrameTiming;
+    batch: boolean;
     onExpired: (ids: number[]) => void;
     onError: (error: Error) => void;
 }

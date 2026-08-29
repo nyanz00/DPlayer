@@ -23,6 +23,7 @@ export type WebGLDanmakuWorkerInput = {
     pixelRatio: number;
     opacity: number;
     frameTiming: WorkerFrameTiming;
+    batch: boolean;
 } | {
     type: 'add';
     item: WorkerDanmakuItem;

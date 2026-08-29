@@ -1,20 +1,19 @@
-export interface WebGLDanmakuSprite {
-    texture: WebGLTexture;
-    width: number;
-    height: number;
-}
-type WebGLDanmakuCanvas = HTMLCanvasElement | OffscreenCanvas;
-export default class WebGLDanmakuRenderer {
+import { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
+type WebGL2DanmakuCanvas = HTMLCanvasElement | OffscreenCanvas;
+export default class WebGL2DanmakuBatchRenderer {
     private readonly canvas;
     private readonly gl;
     private readonly program;
-    private readonly positionLocation;
     private readonly resolutionLocation;
-    private readonly rectangleLocation;
-    private readonly colorLocation;
     private readonly opacityLocation;
+    private readonly vertexBuffer;
+    private readonly instanceBuffer;
+    private readonly pages;
+    private readonly instances;
+    private readonly defaultAtlasSize;
+    private readonly maximumAtlasSize;
     private pixelRatio;
-    constructor(canvas: WebGLDanmakuCanvas);
+    constructor(canvas: WebGL2DanmakuCanvas);
     resize(width: number, height: number, pixelRatio: number): void;
     createSprite(source: TexImageSource, width: number, height: number): WebGLDanmakuSprite;
     deleteSprite(sprite: WebGLDanmakuSprite | undefined): void;
@@ -22,9 +21,12 @@ export default class WebGLDanmakuRenderer {
     drawSprite(sprite: WebGLDanmakuSprite, x: number, y: number, color?: [number, number, number, number]): void;
     endFrame(): void;
     clear(): void;
+    private allocate;
+    private allocateFromPage;
+    private createPage;
     private createProgram;
     private compileShader;
     private requireUniform;
 }
 export {};
-//# sourceMappingURL=webgl-danmaku-renderer.d.ts.map
+//# sourceMappingURL=webgl2-danmaku-batch-renderer.d.ts.map

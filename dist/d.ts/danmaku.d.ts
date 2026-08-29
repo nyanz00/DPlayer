@@ -29,13 +29,11 @@ interface DanmakuOptionsAPI {
     user?: string;
 }
 interface DanmakuTunnelItem {
-    element: HTMLElement | null;
     width: number;
     startedAt: number;
     startedMediaTime: number | null;
     duration: number;
     renderedElapsed?: number;
-    animation?: Animation;
 }
 interface CanvasDanmakuItem {
     workerId: number;
@@ -49,8 +47,6 @@ interface CanvasDanmakuItem {
     bitmapHeight: number;
     bitmapPadding: number;
     webglSprite?: WebGLDanmakuSprite;
-    element?: HTMLCanvasElement;
-    animation?: Animation;
     placement: DanmakuTunnelPlacement;
 }
 interface DanmakuTunnelPlacement {
@@ -122,17 +118,11 @@ declare class Danmaku {
     private resizeCanvas;
     private clearCanvas;
     private drawCanvas;
-    private startCompositorAnimation;
     private renderCanvas;
     private updateDisplayRefreshTiming;
     private createCanvasDanmakuBitmap;
     private removeCanvasItem;
     private removeExpiredWorkerItems;
-    private getCompositorPlaybackRate;
-    private updateCompositorPlaybackRate;
-    private pauseCompositorAnimations;
-    private resumeCompositorAnimations;
-    private destroyCompositorItems;
     play(): void;
     pause(): void;
     private getMediaTimeMilliseconds;
