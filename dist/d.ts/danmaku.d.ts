@@ -17,6 +17,7 @@ interface DanmakuOptions {
     unlimited: number;
     speedRate: number;
     highRefreshRate: boolean;
+    maxFrameRate: number | null;
     api: DanmakuOptionsAPI;
     events: Events;
     tran: (msg: string) => string;
@@ -122,6 +123,7 @@ declare class Danmaku {
     private drawCanvas;
     private renderCanvas;
     private updateDisplayRefreshTiming;
+    private resolveFrameTiming;
     private createCanvasDanmakuBitmap;
     private removeCanvasItem;
     private removeExpiredWorkerItems;

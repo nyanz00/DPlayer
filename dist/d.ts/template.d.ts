@@ -86,6 +86,7 @@ declare class Template {
     infoPageFPS: HTMLElement;
     infoDanmakuRenderer: HTMLElement;
     infoDanmakuRaf: HTMLElement;
+    infoDanmakuRenderFps: HTMLElement;
     infoDanmakuGpu: HTMLElement;
     infoDroppedFrames: HTMLElement;
     infoType: HTMLElement;
