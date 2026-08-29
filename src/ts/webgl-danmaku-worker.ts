@@ -18,6 +18,7 @@ interface WorkerScope {
 
 const scope = globalThis as unknown as WorkerScope;
 const DEFAULT_FRAME_INTERVAL = 1000 / 60;
+const FRAME_DEADLINE_TOLERANCE = 0.5;
 const items = new Map<number, ActiveItem>();
 let renderer: WebGLDanmakuRenderer | WebGL2DanmakuBatchRenderer | null = null;
 let opacity = 1;
@@ -37,6 +38,7 @@ let framesUntilRender = 0;
 let statsStartedAt = 0;
 let lastFrameCallbackAt: number | null = null;
 let frameIntervals: number[] = [];
+let renderedFrames = 0;
 
 const post = (message: WebGLDanmakuWorkerOutput): void => scope.postMessage(message);
 
@@ -55,6 +57,7 @@ const sampleFrameCallback = (now: number): void => {
     if (now - statsStartedAt < 1000 || frameIntervals.length === 0 || !(renderer instanceof WebGL2DanmakuBatchRenderer)) return;
     const sorted = [...frameIntervals].sort((a, b) => a - b);
     const total = frameIntervals.reduce((sum, interval) => sum + interval, 0);
+    const statsDuration = now - statsStartedAt;
     const frameStats = renderer.getFrameStats();
     post({
         type: 'stats',
@@ -63,6 +66,7 @@ const sampleFrameCallback = (now: number): void => {
             rafFps: total > 0 ? frameIntervals.length * 1000 / total : 0,
             rafIntervalAverageMs: total / frameIntervals.length,
             rafIntervalP95Ms: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))],
+            renderFps: statsDuration > 0 ? renderedFrames * 1000 / statsDuration : 0,
             gpuTimeMs: frameStats.gpuTimeMs,
             activeComments: items.size,
             drawCalls: frameStats.drawCalls,
@@ -70,12 +74,14 @@ const sampleFrameCallback = (now: number): void => {
     });
     statsStartedAt = now;
     frameIntervals = [];
+    renderedFrames = 0;
 };
 
 const resetFrameSamples = (): void => {
     statsStartedAt = 0;
     lastFrameCallbackAt = null;
     frameIntervals = [];
+    renderedFrames = 0;
 };
 
 const scheduleFrame = (): void => {
@@ -86,9 +92,10 @@ const scheduleFrame = (): void => {
         sampleFrameCallback(now);
         const shouldRender = scope.requestAnimationFrame && frameDivisor !== null
             ? framesUntilRender === 0
-            : nextRenderAt === 0 || now >= nextRenderAt;
+            : nextRenderAt === 0 || now + FRAME_DEADLINE_TOLERANCE >= nextRenderAt;
         if (shouldRender) {
             render(now);
+            renderedFrames++;
             if (scope.requestAnimationFrame && frameDivisor !== null) {
                 framesUntilRender = frameDivisor - 1;
             } else {
@@ -96,7 +103,7 @@ const scheduleFrame = (): void => {
                 else {
                     do {
                         nextRenderAt += frameInterval;
-                    } while (nextRenderAt <= now);
+                    } while (nextRenderAt <= now + FRAME_DEADLINE_TOLERANCE);
                 }
             }
         } else if (scope.requestAnimationFrame && frameDivisor !== null) {

@@ -68,6 +68,10 @@ export default (options: DPlayerType.Options): DPlayerType.OptionsInternal => {
         !options.danmaku.speedRate && (options.danmaku.speedRate = 1);
         !options.danmaku.fontSize && (options.danmaku.fontSize = 35);
         options.danmaku.highRefreshRate = options.danmaku.highRefreshRate === true;
+        const maxFrameRate = Number(options.danmaku.maxFrameRate);
+        options.danmaku.maxFrameRate = Number.isFinite(maxFrameRate) && maxFrameRate >= 24 && maxFrameRate <= 360
+            ? maxFrameRate
+            : undefined;
         options.danmaku.closeCommentFormAfterSend !== false && (options.danmaku.closeCommentFormAfterSend = true);
     }
     if (options.subtitle) {

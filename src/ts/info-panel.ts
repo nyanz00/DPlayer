@@ -56,12 +56,14 @@ class InfoPanel {
         if (danmakuStats) {
             this.template.infoDanmakuRenderer.textContent = `WebGL2 batch / ${danmakuStats.activeComments} comments / ${danmakuStats.drawCalls} draw calls`;
             this.template.infoDanmakuRaf.textContent = `${danmakuStats.rafFps.toFixed(1)} fps / avg ${danmakuStats.rafIntervalAverageMs.toFixed(2)} ms / p95 ${danmakuStats.rafIntervalP95Ms.toFixed(2)} ms`;
+            this.template.infoDanmakuRenderFps.textContent = `${danmakuStats.renderFps.toFixed(1)} fps`;
             this.template.infoDanmakuGpu.textContent = danmakuStats.gpuTimeMs === null
                 ? 'N/A'
                 : `${danmakuStats.gpuTimeMs.toFixed(3)} ms`;
         } else {
             this.template.infoDanmakuRenderer.textContent = this.player.danmaku ? 'Standard' : 'N/A';
             this.template.infoDanmakuRaf.textContent = 'N/A';
+            this.template.infoDanmakuRenderFps.textContent = 'N/A';
             this.template.infoDanmakuGpu.textContent = 'N/A';
         }
 

@@ -5,10 +5,11 @@ import defaultApiBackend from './api';
 import * as DPlayerType from './types';
 import WebGLDanmakuRenderer, { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
 import WebGLDanmakuWorkerRenderer from './webgl-danmaku-worker-renderer';
-import { WorkerDanmakuRenderStats } from './webgl-danmaku-worker-protocol';
+import { WorkerDanmakuRenderStats, WorkerFrameTiming } from './webgl-danmaku-worker-protocol';
 import { DisplayRefreshTiming, sampleDisplayRefreshFrame, subscribeDisplayRefreshTiming } from './display-refresh-rate';
 
 const DANMAKU_FRAME_INTERVAL = 1000 / 60;
+const FRAME_DEADLINE_TOLERANCE = 0.5;
 
 interface DanmakuOptions {
     player: DPlayer,
@@ -23,6 +24,7 @@ interface DanmakuOptions {
     unlimited: number,
     speedRate: number,
     highRefreshRate: boolean,
+    maxFrameRate: number | null,
     api: DanmakuOptionsAPI,
     events: Events,
     tran: (msg: string) => string,
@@ -117,6 +119,11 @@ class Danmaku {
         this.unlimited = this.options.unlimited === 1;
         this.containerWidth = this.container.clientWidth;
         this.containerHeight = this.container.clientHeight;
+        if (this.options.highRefreshRate) {
+            const timing = this.resolveFrameTiming(null);
+            this.canvasFrameDivisor = timing.frameDivisor;
+            this.canvasFrameInterval = timing.frameInterval;
+        }
         if (!this.options.highRefreshRate) {
             this.unsubscribeDisplayRefreshTiming = subscribeDisplayRefreshTiming(timing => this.updateDisplayRefreshTiming(timing));
         }
@@ -319,7 +326,7 @@ class Danmaku {
                 pixelRatio: Math.min(2, Math.max(1, window.devicePixelRatio || 1)),
                 opacity: this._opacity,
                 frameTiming: {
-                    frameDivisor: this.options.highRefreshRate ? 1 : this.canvasFrameDivisor,
+                    frameDivisor: this.canvasFrameDivisor,
                     frameInterval: this.canvasFrameInterval,
                 },
                 batch: this.options.highRefreshRate,
@@ -523,7 +530,7 @@ class Danmaku {
             this.canvasFramesUntilRender = 0;
             return;
         }
-        if (!this.options.highRefreshRate) {
+        if (!this.options.highRefreshRate || this.options.maxFrameRate !== null) {
             if (this.canvasFrameDivisor !== null) {
                 if (this.canvasFramesUntilRender > 0) {
                     this.canvasFramesUntilRender--;
@@ -531,12 +538,12 @@ class Danmaku {
                 }
                 this.canvasFramesUntilRender = this.canvasFrameDivisor - 1;
             } else {
-                if (this.nextCanvasRenderAt !== 0 && now < this.nextCanvasRenderAt) return;
+                if (this.nextCanvasRenderAt !== 0 && now + FRAME_DEADLINE_TOLERANCE < this.nextCanvasRenderAt) return;
                 if (this.nextCanvasRenderAt === 0) this.nextCanvasRenderAt = now + this.canvasFrameInterval;
                 else {
                     do {
                         this.nextCanvasRenderAt += this.canvasFrameInterval;
-                    } while (this.nextCanvasRenderAt <= now);
+                    } while (this.nextCanvasRenderAt <= now + FRAME_DEADLINE_TOLERANCE);
                 }
             }
         }
@@ -592,14 +599,32 @@ class Danmaku {
     }
 
     private updateDisplayRefreshTiming(timing: DisplayRefreshTiming | null): void {
-        this.canvasFrameDivisor = timing?.frameDivisor ?? null;
-        this.canvasFrameInterval = timing?.frameInterval ?? DANMAKU_FRAME_INTERVAL;
+        const resolved = this.resolveFrameTiming(timing);
+        this.canvasFrameDivisor = resolved.frameDivisor;
+        this.canvasFrameInterval = resolved.frameInterval;
         this.canvasFramesUntilRender = 0;
         this.nextCanvasRenderAt = 0;
         this.workerRenderer?.frameTiming({
             frameDivisor: this.canvasFrameDivisor,
             frameInterval: this.canvasFrameInterval,
         });
+    }
+
+    private resolveFrameTiming(timing: DisplayRefreshTiming | null): WorkerFrameTiming {
+        const maximumInterval = this.options.maxFrameRate === null
+            ? null
+            : 1000 / this.options.maxFrameRate;
+        if (this.options.highRefreshRate) {
+            return maximumInterval === null
+                ? { frameDivisor: 1, frameInterval: DANMAKU_FRAME_INTERVAL }
+                : { frameDivisor: null, frameInterval: maximumInterval };
+        }
+        const automatic: WorkerFrameTiming = {
+            frameDivisor: timing?.frameDivisor ?? null,
+            frameInterval: timing?.frameInterval ?? DANMAKU_FRAME_INTERVAL,
+        };
+        if (maximumInterval === null || maximumInterval <= automatic.frameInterval) return automatic;
+        return { frameDivisor: null, frameInterval: maximumInterval };
     }
 
     private createCanvasDanmakuBitmap(

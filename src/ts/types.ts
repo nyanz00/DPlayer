@@ -478,6 +478,11 @@ export interface Danmaku {
     highRefreshRate?: boolean;
 
     /**
+     * @description maximum danmaku rendering frame rate; omit to use automatic timing
+     */
+    maxFrameRate?: number | null;
+
+    /**
      * @description close comment form after send danmaku
      * @default true
      */
@@ -592,6 +597,7 @@ export interface DanmakuInternal {
     speedRate : number;
     fontSize: number;
     highRefreshRate: boolean;
+    maxFrameRate: number | null;
     closeCommentFormAfterSend: boolean;
 }
 

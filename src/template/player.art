@@ -295,7 +295,7 @@
         <span class="dplayer-info-panel-item-data"></span>
     </div>
     <div class="dplayer-info-panel-item dplayer-info-panel-item-page-fps">
-        <span class="dplayer-info-panel-item-title">Page FPS</span>
+        <span class="dplayer-info-panel-item-title">Page rAF</span>
         <span class="dplayer-info-panel-item-data"></span>
     </div>
     <div class="dplayer-info-panel-item dplayer-info-panel-item-danmaku-renderer">
@@ -304,6 +304,10 @@
     </div>
     <div class="dplayer-info-panel-item dplayer-info-panel-item-danmaku-raf">
         <span class="dplayer-info-panel-item-title">Danmaku Worker rAF</span>
+        <span class="dplayer-info-panel-item-data"></span>
+    </div>
+    <div class="dplayer-info-panel-item dplayer-info-panel-item-danmaku-render-fps">
+        <span class="dplayer-info-panel-item-title">Danmaku Render FPS</span>
         <span class="dplayer-info-panel-item-data"></span>
     </div>
     <div class="dplayer-info-panel-item dplayer-info-panel-item-danmaku-gpu">

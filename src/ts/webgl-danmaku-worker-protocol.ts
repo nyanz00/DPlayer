@@ -22,6 +22,7 @@ export interface WorkerDanmakuRenderStats {
     rafFps: number,
     rafIntervalAverageMs: number,
     rafIntervalP95Ms: number,
+    renderFps: number,
     gpuTimeMs: number | null,
     activeComments: number,
     drawCalls: number,

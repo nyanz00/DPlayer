@@ -476,6 +476,7 @@ class DPlayer {
             unlimited: this.user.get('unlimited'),
             speedRate: typeof danmakuAPI === 'boolean' ? 1 : danmakuAPI.speedRate || 1,
             highRefreshRate: typeof danmakuAPI === 'boolean' ? false : danmakuAPI.highRefreshRate === true,
+            maxFrameRate: typeof danmakuAPI === 'boolean' ? null : danmakuAPI.maxFrameRate ?? null,
             api: typeof danmakuAPI === 'boolean' ? {} : {
                 id: danmakuAPI.id,
                 address: danmakuAPI.api,
