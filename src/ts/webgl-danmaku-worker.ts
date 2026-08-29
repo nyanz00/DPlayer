@@ -39,6 +39,9 @@ let statsStartedAt = 0;
 let lastFrameCallbackAt: number | null = null;
 let frameIntervals: number[] = [];
 let renderedFrames = 0;
+let textureUploadTotalMs = 0;
+let textureUploadMaxMs = 0;
+let textureUploadCount = 0;
 
 const post = (message: WebGLDanmakuWorkerOutput): void => scope.postMessage(message);
 
@@ -66,15 +69,24 @@ const sampleFrameCallback = (now: number): void => {
             rafFps: total > 0 ? frameIntervals.length * 1000 / total : 0,
             rafIntervalAverageMs: total / frameIntervals.length,
             rafIntervalP95Ms: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))],
+            rafIntervalP99Ms: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.99))],
+            rafIntervalMaxMs: sorted[sorted.length - 1],
+            rafIntervalsOver14Ms: frameIntervals.filter(interval => interval >= 14).length,
             renderFps: statsDuration > 0 ? renderedFrames * 1000 / statsDuration : 0,
             gpuTimeMs: frameStats.gpuTimeMs,
             activeComments: items.size,
             drawCalls: frameStats.drawCalls,
+            textureUploadAverageMs: textureUploadCount > 0 ? textureUploadTotalMs / textureUploadCount : 0,
+            textureUploadMaxMs,
+            textureUploadCount,
         },
     });
     statsStartedAt = now;
     frameIntervals = [];
     renderedFrames = 0;
+    textureUploadTotalMs = 0;
+    textureUploadMaxMs = 0;
+    textureUploadCount = 0;
 };
 
 const resetFrameSamples = (): void => {
@@ -82,6 +94,9 @@ const resetFrameSamples = (): void => {
     lastFrameCallbackAt = null;
     frameIntervals = [];
     renderedFrames = 0;
+    textureUploadTotalMs = 0;
+    textureUploadMaxMs = 0;
+    textureUploadCount = 0;
 };
 
 const scheduleFrame = (): void => {
@@ -201,6 +216,7 @@ scope.onmessage = (event): void => {
                 message.bitmap.close();
                 break;
             }
+            const textureUploadStartedAt = performance.now();
             const sprite = renderer.createSprite(message.bitmap, message.item.width, message.item.height);
             message.bitmap.close();
             const now = performance.now();
@@ -223,6 +239,10 @@ scope.onmessage = (event): void => {
                     duration: message.item.duration,
                     startedAt: animationStartedAt,
                 });
+                const textureUploadDuration = performance.now() - textureUploadStartedAt;
+                textureUploadTotalMs += textureUploadDuration;
+                textureUploadMaxMs = Math.max(textureUploadMaxMs, textureUploadDuration);
+                textureUploadCount++;
             }
             scheduleFrame();
             break;

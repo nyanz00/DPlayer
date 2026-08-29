@@ -10,6 +10,7 @@ interface WorkerRendererOptions {
     batch: boolean,
     onExpired: (ids: number[]) => void,
     onStats: (stats: WorkerDanmakuRenderStats) => void,
+    onBitmapPrepared: (durationMs: number) => void,
     onError: (error: Error) => void,
 }
 
@@ -59,11 +60,13 @@ export default class WebGLDanmakuWorkerRenderer {
 
     add(item: WorkerDanmakuItem, source: HTMLCanvasElement): void {
         this.activeIds.add(item.id);
+        const startedAt = performance.now();
         createImageBitmap(source).then(bitmap => {
             if (this.destroyed || !this.activeIds.has(item.id)) {
                 bitmap.close();
                 return;
             }
+            this.options.onBitmapPrepared(performance.now() - startedAt);
             this.post({ type: 'add', item, bitmap }, [bitmap]);
         }).catch(error => this.options.onError(error instanceof Error ? error : new Error(String(error))));
     }

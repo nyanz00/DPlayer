@@ -22,10 +22,16 @@ export interface WorkerDanmakuRenderStats {
     rafFps: number,
     rafIntervalAverageMs: number,
     rafIntervalP95Ms: number,
+    rafIntervalP99Ms: number,
+    rafIntervalMaxMs: number,
+    rafIntervalsOver14Ms: number,
     renderFps: number,
     gpuTimeMs: number | null,
     activeComments: number,
     drawCalls: number,
+    textureUploadAverageMs: number,
+    textureUploadMaxMs: number,
+    textureUploadCount: number,
 }
 
 export type WebGLDanmakuWorkerInput =

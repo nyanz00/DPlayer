@@ -55,16 +55,22 @@ class InfoPanel {
         const danmakuStats = this.player.danmaku?.renderStats;
         if (danmakuStats) {
             this.template.infoDanmakuRenderer.textContent = `WebGL2 batch / ${danmakuStats.activeComments} comments / ${danmakuStats.drawCalls} draw calls`;
-            this.template.infoDanmakuRaf.textContent = `${danmakuStats.rafFps.toFixed(1)} fps / avg ${danmakuStats.rafIntervalAverageMs.toFixed(2)} ms / p95 ${danmakuStats.rafIntervalP95Ms.toFixed(2)} ms`;
+            this.template.infoDanmakuRaf.textContent = `${danmakuStats.rafFps.toFixed(1)} fps / avg ${danmakuStats.rafIntervalAverageMs.toFixed(2)} ms / p95 ${danmakuStats.rafIntervalP95Ms.toFixed(2)} ms / p99 ${danmakuStats.rafIntervalP99Ms.toFixed(2)} ms / max ${danmakuStats.rafIntervalMaxMs.toFixed(2)} ms / >=14 ms ${danmakuStats.rafIntervalsOver14Ms}`;
             this.template.infoDanmakuRenderFps.textContent = `${danmakuStats.renderFps.toFixed(1)} fps`;
             this.template.infoDanmakuGpu.textContent = danmakuStats.gpuTimeMs === null
                 ? 'N/A'
                 : `${danmakuStats.gpuTimeMs.toFixed(3)} ms`;
+            this.template.infoDanmakuBitmap.textContent = `avg ${danmakuStats.bitmapGenerationAverageMs.toFixed(3)} ms / max ${danmakuStats.bitmapGenerationMaxMs.toFixed(3)} ms / ${danmakuStats.bitmapGenerationCount} images / max ${danmakuStats.maxCommentsAddedPerFrame} per frame`;
+            this.template.infoDanmakuImageBitmap.textContent = `avg ${danmakuStats.imageBitmapAverageMs.toFixed(3)} ms / max ${danmakuStats.imageBitmapMaxMs.toFixed(3)} ms / ${danmakuStats.imageBitmapCount} images`;
+            this.template.infoDanmakuTexture.textContent = `avg ${danmakuStats.textureUploadAverageMs.toFixed(3)} ms / max ${danmakuStats.textureUploadMaxMs.toFixed(3)} ms / ${danmakuStats.textureUploadCount} uploads`;
         } else {
             this.template.infoDanmakuRenderer.textContent = this.player.danmaku ? 'Standard' : 'N/A';
             this.template.infoDanmakuRaf.textContent = 'N/A';
             this.template.infoDanmakuRenderFps.textContent = 'N/A';
             this.template.infoDanmakuGpu.textContent = 'N/A';
+            this.template.infoDanmakuBitmap.textContent = 'N/A';
+            this.template.infoDanmakuImageBitmap.textContent = 'N/A';
+            this.template.infoDanmakuTexture.textContent = 'N/A';
         }
 
         // Dropped Frames

@@ -55,6 +55,15 @@ interface DanmakuTunnelPlacement {
     lane: number;
     item: DanmakuTunnelItem;
 }
+interface DanmakuRenderStats extends WorkerDanmakuRenderStats {
+    bitmapGenerationAverageMs: number;
+    bitmapGenerationMaxMs: number;
+    bitmapGenerationCount: number;
+    imageBitmapAverageMs: number;
+    imageBitmapMaxMs: number;
+    imageBitmapCount: number;
+    maxCommentsAddedPerFrame: number;
+}
 declare class Danmaku {
     options: DanmakuOptions;
     player: DPlayer;
@@ -93,7 +102,14 @@ declare class Danmaku {
     canvasFrameInterval: number;
     canvasFramesUntilRender: number;
     unsubscribeDisplayRefreshTiming: (() => void) | null;
-    renderStats: WorkerDanmakuRenderStats | null;
+    renderStats: DanmakuRenderStats | null;
+    bitmapGenerationTotalMs: number;
+    bitmapGenerationMaxMs: number;
+    bitmapGenerationCount: number;
+    imageBitmapTotalMs: number;
+    imageBitmapMaxMs: number;
+    imageBitmapCount: number;
+    maxCommentsAddedPerFrame: number;
     constructor(options: DanmakuOptions);
     load(): void;
     reload(newAPI: DanmakuOptionsAPI): void;
@@ -121,6 +137,9 @@ declare class Danmaku {
     private resizeCanvas;
     private clearCanvas;
     private drawCanvas;
+    private recordBitmapGeneration;
+    private recordImageBitmapPreparation;
+    private resetCommentCreationStats;
     private renderCanvas;
     private updateDisplayRefreshTiming;
     private resolveFrameTiming;

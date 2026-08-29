@@ -314,6 +314,18 @@
         <span class="dplayer-info-panel-item-title">Danmaku GPU Time</span>
         <span class="dplayer-info-panel-item-data"></span>
     </div>
+    <div class="dplayer-info-panel-item dplayer-info-panel-item-danmaku-bitmap">
+        <span class="dplayer-info-panel-item-title">Danmaku Bitmap Raster</span>
+        <span class="dplayer-info-panel-item-data"></span>
+    </div>
+    <div class="dplayer-info-panel-item dplayer-info-panel-item-danmaku-image-bitmap">
+        <span class="dplayer-info-panel-item-title">Danmaku ImageBitmap</span>
+        <span class="dplayer-info-panel-item-data"></span>
+    </div>
+    <div class="dplayer-info-panel-item dplayer-info-panel-item-danmaku-texture">
+        <span class="dplayer-info-panel-item-title">Danmaku Texture Upload</span>
+        <span class="dplayer-info-panel-item-data"></span>
+    </div>
     <div class="dplayer-info-panel-item dplayer-info-panel-item-dropped-frames">
         <span class="dplayer-info-panel-item-title">Dropped Frames</span>
         <span class="dplayer-info-panel-item-data"></span>

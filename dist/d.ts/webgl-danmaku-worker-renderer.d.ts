@@ -8,6 +8,7 @@ interface WorkerRendererOptions {
     batch: boolean;
     onExpired: (ids: number[]) => void;
     onStats: (stats: WorkerDanmakuRenderStats) => void;
+    onBitmapPrepared: (durationMs: number) => void;
     onError: (error: Error) => void;
 }
 export default class WebGLDanmakuWorkerRenderer {

@@ -67,6 +67,16 @@ interface DanmakuTunnelPlacement {
     item: DanmakuTunnelItem,
 }
 
+interface DanmakuRenderStats extends WorkerDanmakuRenderStats {
+    bitmapGenerationAverageMs: number,
+    bitmapGenerationMaxMs: number,
+    bitmapGenerationCount: number,
+    imageBitmapAverageMs: number,
+    imageBitmapMaxMs: number,
+    imageBitmapCount: number,
+    maxCommentsAddedPerFrame: number,
+}
+
 class Danmaku {
     options: DanmakuOptions;
     player: DPlayer;
@@ -100,7 +110,14 @@ class Danmaku {
     canvasFrameInterval = DANMAKU_FRAME_INTERVAL;
     canvasFramesUntilRender = 0;
     unsubscribeDisplayRefreshTiming: (() => void) | null = null;
-    renderStats: WorkerDanmakuRenderStats | null = null;
+    renderStats: DanmakuRenderStats | null = null;
+    bitmapGenerationTotalMs = 0;
+    bitmapGenerationMaxMs = 0;
+    bitmapGenerationCount = 0;
+    imageBitmapTotalMs = 0;
+    imageBitmapMaxMs = 0;
+    imageBitmapCount = 0;
+    maxCommentsAddedPerFrame = 0;
 
     constructor(options: DanmakuOptions) {
         this.options = options;
@@ -332,8 +349,23 @@ class Danmaku {
                 batch: this.options.highRefreshRate,
                 onExpired: ids => this.removeExpiredWorkerItems(ids),
                 onStats: stats => {
-                    this.renderStats = stats;
+                    this.renderStats = {
+                        ...stats,
+                        bitmapGenerationAverageMs: this.bitmapGenerationCount > 0
+                            ? this.bitmapGenerationTotalMs / this.bitmapGenerationCount
+                            : 0,
+                        bitmapGenerationMaxMs: this.bitmapGenerationMaxMs,
+                        bitmapGenerationCount: this.bitmapGenerationCount,
+                        imageBitmapAverageMs: this.imageBitmapCount > 0
+                            ? this.imageBitmapTotalMs / this.imageBitmapCount
+                            : 0,
+                        imageBitmapMaxMs: this.imageBitmapMaxMs,
+                        imageBitmapCount: this.imageBitmapCount,
+                        maxCommentsAddedPerFrame: this.maxCommentsAddedPerFrame,
+                    };
+                    this.resetCommentCreationStats();
                 },
+                onBitmapPrepared: durationMs => this.recordImageBitmapPreparation(durationMs),
                 onError: error => this.fallbackFromWorker(error),
             });
         } catch (error) {
@@ -368,6 +400,7 @@ class Danmaku {
         this.workerRenderer.destroy();
         this.workerRenderer = null;
         this.renderStats = null;
+        this.resetCommentCreationStats();
         const replacement = this.createCanvas();
         this.canvas.replaceWith(replacement);
         this.canvas = replacement;
@@ -400,6 +433,7 @@ class Danmaku {
     private clearCanvas(): void {
         if (this.workerRenderer) {
             this.renderStats = null;
+            this.resetCommentCreationStats();
             this.workerRenderer.clear();
             return;
         }
@@ -419,6 +453,7 @@ class Danmaku {
         const laneCount = Math.max(1, Math.floor(this.containerHeight / itemHeight));
         const danWidth = this.containerWidth;
         const danHeight = this.containerHeight;
+        let commentsAddedThisFrame = 0;
 
         const canShareRightLane = (previous: DanmakuTunnelItem, width: number, duration: number, now: number): boolean => {
             const elapsed = Math.max(0, previous.renderedElapsed ?? now - previous.startedAt);
@@ -477,7 +512,10 @@ class Danmaku {
                 const placement = getTunnel(type, width, duration);
                 if (!placement) continue;
                 const border = 'border' in source && Boolean(source.border);
+                const bitmapStartedAt = performance.now();
                 const bitmap = this.createCanvasDanmakuBitmap(line, color, fontSize, border);
+                this.recordBitmapGeneration(performance.now() - bitmapStartedAt);
+                commentsAddedThisFrame++;
                 const workerId = this.nextWorkerId++;
                 const startX = type === 'right' ? danWidth : (danWidth - width) / 2;
                 const endX = type === 'right' ? -width : startX;
@@ -518,6 +556,29 @@ class Danmaku {
                 }, bitmap.canvas);
             }
         }
+        this.maxCommentsAddedPerFrame = Math.max(this.maxCommentsAddedPerFrame, commentsAddedThisFrame);
+    }
+
+    private recordBitmapGeneration(durationMs: number): void {
+        this.bitmapGenerationTotalMs += durationMs;
+        this.bitmapGenerationMaxMs = Math.max(this.bitmapGenerationMaxMs, durationMs);
+        this.bitmapGenerationCount++;
+    }
+
+    private recordImageBitmapPreparation(durationMs: number): void {
+        this.imageBitmapTotalMs += durationMs;
+        this.imageBitmapMaxMs = Math.max(this.imageBitmapMaxMs, durationMs);
+        this.imageBitmapCount++;
+    }
+
+    private resetCommentCreationStats(): void {
+        this.bitmapGenerationTotalMs = 0;
+        this.bitmapGenerationMaxMs = 0;
+        this.bitmapGenerationCount = 0;
+        this.imageBitmapTotalMs = 0;
+        this.imageBitmapMaxMs = 0;
+        this.imageBitmapCount = 0;
+        this.maxCommentsAddedPerFrame = 0;
     }
 
     private renderCanvas(now: number): void {
