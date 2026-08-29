@@ -15,6 +15,15 @@ export interface WorkerFrameTiming {
     frameDivisor: number | null;
     frameInterval: number;
 }
+export interface WorkerDanmakuRenderStats {
+    mode: 'webgl2-batch';
+    rafFps: number;
+    rafIntervalAverageMs: number;
+    rafIntervalP95Ms: number;
+    gpuTimeMs: number | null;
+    activeComments: number;
+    drawCalls: number;
+}
 export type WebGLDanmakuWorkerInput = {
     type: 'init';
     canvas: OffscreenCanvas;
@@ -56,6 +65,9 @@ export type WebGLDanmakuWorkerOutput = {
 } | {
     type: 'expired';
     ids: number[];
+} | {
+    type: 'stats';
+    value: WorkerDanmakuRenderStats;
 } | {
     type: 'error';
     message: string;

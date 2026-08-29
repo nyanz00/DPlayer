@@ -1,4 +1,4 @@
-import { WorkerDanmakuItem, WorkerFrameTiming } from './webgl-danmaku-worker-protocol';
+import { WorkerDanmakuItem, WorkerDanmakuRenderStats, WorkerFrameTiming } from './webgl-danmaku-worker-protocol';
 interface WorkerRendererOptions {
     width: number;
     height: number;
@@ -7,6 +7,7 @@ interface WorkerRendererOptions {
     frameTiming: WorkerFrameTiming;
     batch: boolean;
     onExpired: (ids: number[]) => void;
+    onStats: (stats: WorkerDanmakuRenderStats) => void;
     onError: (error: Error) => void;
 }
 export default class WebGLDanmakuWorkerRenderer {

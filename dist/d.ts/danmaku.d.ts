@@ -3,6 +3,7 @@ import Events from './events';
 import * as DPlayerType from './types';
 import WebGLDanmakuRenderer, { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
 import WebGLDanmakuWorkerRenderer from './webgl-danmaku-worker-renderer';
+import { WorkerDanmakuRenderStats } from './webgl-danmaku-worker-protocol';
 interface DanmakuOptions {
     player: DPlayer;
     container: HTMLElement;
@@ -91,6 +92,7 @@ declare class Danmaku {
     canvasFrameInterval: number;
     canvasFramesUntilRender: number;
     unsubscribeDisplayRefreshTiming: (() => void) | null;
+    renderStats: WorkerDanmakuRenderStats | null;
     constructor(options: DanmakuOptions);
     load(): void;
     reload(newAPI: DanmakuOptionsAPI): void;
