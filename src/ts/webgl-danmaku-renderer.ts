@@ -89,6 +89,10 @@ export default class WebGLDanmakuRenderer {
         this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
     }
 
+    endFrame(): void {
+        // The WebGL1 fallback submits each sprite immediately.
+    }
+
     clear(): void {
         this.gl.clearColor(0, 0, 0, 0);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);

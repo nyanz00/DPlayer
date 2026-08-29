@@ -18,7 +18,7 @@ export interface WorkerFrameTiming {
 }
 
 export type WebGLDanmakuWorkerInput =
-    | { type: 'init', canvas: OffscreenCanvas, width: number, height: number, pixelRatio: number, opacity: number, frameTiming: WorkerFrameTiming }
+    | { type: 'init', canvas: OffscreenCanvas, width: number, height: number, pixelRatio: number, opacity: number, frameTiming: WorkerFrameTiming, batch: boolean }
     | { type: 'add', item: WorkerDanmakuItem, bitmap: ImageBitmap }
     | { type: 'remove', id: number }
     | { type: 'resize', width: number, height: number, pixelRatio: number }

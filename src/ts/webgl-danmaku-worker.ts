@@ -1,4 +1,5 @@
 import WebGLDanmakuRenderer, { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
+import WebGL2DanmakuBatchRenderer from './webgl2-danmaku-batch-renderer';
 import { WebGLDanmakuWorkerInput, WebGLDanmakuWorkerOutput, WorkerDanmakuItem, WorkerFrameTiming } from './webgl-danmaku-worker-protocol';
 
 interface ActiveItem extends WorkerDanmakuItem {
@@ -17,7 +18,7 @@ interface WorkerScope {
 const scope = globalThis as unknown as WorkerScope;
 const DEFAULT_FRAME_INTERVAL = 1000 / 60;
 const items = new Map<number, ActiveItem>();
-let renderer: WebGLDanmakuRenderer | null = null;
+let renderer: WebGLDanmakuRenderer | WebGL2DanmakuBatchRenderer | null = null;
 let opacity = 1;
 let pixelRatio = 1;
 let mediaAnchor: number | null = null;
@@ -115,6 +116,7 @@ const render = (now: number): void => {
         const drawY = Math.round((item.y - item.padding) * pixelRatio) / pixelRatio;
         renderer.drawSprite(item.sprite, drawX, drawY);
     }
+    renderer.endFrame();
 
     if (expired.length) {
         expired.forEach(deleteItem);
@@ -129,7 +131,9 @@ scope.onmessage = (event): void => {
         switch (message.type) {
         case 'init':
             setFrameTiming(message.frameTiming);
-            renderer = new WebGLDanmakuRenderer(message.canvas);
+            renderer = message.batch
+                ? new WebGL2DanmakuBatchRenderer(message.canvas)
+                : new WebGLDanmakuRenderer(message.canvas);
             pixelRatio = message.pixelRatio;
             opacity = message.opacity;
             renderer.resize(message.width, message.height, message.pixelRatio);

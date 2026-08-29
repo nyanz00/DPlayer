@@ -37,13 +37,11 @@ interface DanmakuOptionsAPI {
 }
 
 interface DanmakuTunnelItem {
-    element: HTMLElement | null,
     width: number,
     startedAt: number,
     startedMediaTime: number | null,
     duration: number,
     renderedElapsed?: number,
-    animation?: Animation,
 }
 
 interface CanvasDanmakuItem {
@@ -58,8 +56,6 @@ interface CanvasDanmakuItem {
     bitmapHeight: number,
     bitmapPadding: number,
     webglSprite?: WebGLDanmakuSprite,
-    element?: HTMLCanvasElement,
-    animation?: Animation,
     placement: DanmakuTunnelPlacement,
 }
 
@@ -117,51 +113,42 @@ class Danmaku {
         this._opacity = this.options.opacity;
         this.events = this.options.events;
         this.unlimited = this.options.unlimited === 1;
-        this.options.highRefreshRate = this.options.highRefreshRate && typeof this.container.animate === 'function';
         this.containerWidth = this.container.clientWidth;
         this.containerHeight = this.container.clientHeight;
         if (!this.options.highRefreshRate) {
             this.unsubscribeDisplayRefreshTiming = subscribeDisplayRefreshTiming(timing => this.updateDisplayRefreshTiming(timing));
-            this.initCanvas();
         }
+        this.initCanvas();
         this.events.on('destroy', () => {
             this.unsubscribeDisplayRefreshTiming?.();
             this.unsubscribeDisplayRefreshTiming = null;
             this.workerRenderer?.destroy();
             this.workerRenderer = null;
-            this.destroyCompositorItems();
         });
         this.events.on('waiting', () => {
             this.mediaWaiting = true;
-            this.pauseCompositorAnimations();
             this.syncWorkerClock(true);
         });
         this.events.on('seeking', () => {
             this.mediaWaiting = true;
-            this.pauseCompositorAnimations();
             this.syncWorkerClock(true);
         });
         this.events.on('playing', () => {
             this.mediaWaiting = false;
-            this.resumeCompositorAnimations();
             this.syncWorkerClock(true);
         });
         this.events.on('canplay', () => {
             this.mediaWaiting = false;
-            this.resumeCompositorAnimations();
             this.syncWorkerClock(true);
         });
         this.events.on('seeked', () => {
             this.mediaWaiting = false;
-            this.resumeCompositorAnimations();
             this.syncWorkerClock(true);
         });
         this.events.on('ratechange', () => {
-            this.updateCompositorPlaybackRate();
             this.syncWorkerClock(true);
         });
         this.events.on('ended', () => {
-            this.pauseCompositorAnimations();
             this.syncWorkerClock(true);
         });
         this.load();
@@ -330,9 +317,10 @@ class Danmaku {
                 pixelRatio: Math.min(2, Math.max(1, window.devicePixelRatio || 1)),
                 opacity: this._opacity,
                 frameTiming: {
-                    frameDivisor: this.canvasFrameDivisor,
+                    frameDivisor: this.options.highRefreshRate ? 1 : this.canvasFrameDivisor,
                     frameInterval: this.canvasFrameInterval,
                 },
+                batch: this.options.highRefreshRate,
                 onExpired: ids => this.removeExpiredWorkerItems(ids),
                 onError: error => this.fallbackFromWorker(error),
             });
@@ -419,8 +407,7 @@ class Danmaku {
         const danHeight = this.containerHeight;
 
         const canShareRightLane = (previous: DanmakuTunnelItem, width: number, duration: number, now: number): boolean => {
-            const animationTime = previous.animation?.currentTime;
-            const elapsed = Math.max(0, typeof animationTime === 'number' ? animationTime : previous.renderedElapsed ?? now - previous.startedAt);
+            const elapsed = Math.max(0, previous.renderedElapsed ?? now - previous.startedAt);
             if (elapsed >= previous.duration) return true;
             const progress = elapsed / previous.duration;
             const previousRight = (danWidth + previous.width) * (1 - progress);
@@ -437,7 +424,6 @@ class Danmaku {
         const getTunnel = (type: DPlayerType.DanmakuType, width: number, duration: number): DanmakuTunnelPlacement | null => {
             const now = performance.now();
             const tunnelItem: DanmakuTunnelItem = {
-                element: null,
                 width,
                 startedAt: now,
                 startedMediaTime: this.getMediaTimeMilliseconds(),
@@ -498,62 +484,29 @@ class Danmaku {
                     placement,
                 };
                 this.canvasItems.add(item);
-                if (this.options.highRefreshRate) {
-                    this.startCompositorAnimation(item);
-                } else {
-                    item.webglSprite = this.webglRenderer?.createSprite(bitmap.canvas, bitmap.width, bitmap.height);
-                    const startedMediaTime = placement.item.startedMediaTime;
-                    const mediaTime = this.getMediaTimeMilliseconds();
-                    this.workerRenderer?.add({
-                        id: workerId,
-                        type,
-                        startX,
-                        endX,
-                        y,
-                        width: bitmap.width,
-                        height: bitmap.height,
-                        padding: bitmap.padding,
-                        duration,
-                        startedMediaTime,
-                        elapsed: mediaTime !== null && startedMediaTime !== null
-                            ? Math.max(0, mediaTime - startedMediaTime)
-                            : Math.max(0, performance.now() - placement.item.startedAt),
-                    }, bitmap.canvas);
-                }
+                item.webglSprite = this.webglRenderer?.createSprite(bitmap.canvas, bitmap.width, bitmap.height);
+                const startedMediaTime = placement.item.startedMediaTime;
+                const mediaTime = this.getMediaTimeMilliseconds();
+                this.workerRenderer?.add({
+                    id: workerId,
+                    type,
+                    startX,
+                    endX,
+                    y,
+                    width: bitmap.width,
+                    height: bitmap.height,
+                    padding: bitmap.padding,
+                    duration,
+                    startedMediaTime,
+                    elapsed: mediaTime !== null && startedMediaTime !== null
+                        ? Math.max(0, mediaTime - startedMediaTime)
+                        : Math.max(0, performance.now() - placement.item.startedAt),
+                }, bitmap.canvas);
             }
         }
     }
 
-    private startCompositorAnimation(item: CanvasDanmakuItem): void {
-        const element = item.bitmap;
-        element.className = 'dplayer-danmaku-compositor-item';
-        element.setAttribute('aria-hidden', 'true');
-        element.style.width = `${item.bitmapWidth}px`;
-        element.style.height = `${item.bitmapHeight}px`;
-        const startTransform = `translate3d(${item.startX - item.bitmapPadding}px, ${item.y - item.bitmapPadding}px, 0)`;
-        const endTransform = `translate3d(${item.endX - item.bitmapPadding}px, ${item.y - item.bitmapPadding}px, 0)`;
-        element.style.transform = startTransform;
-        this.container.appendChild(element);
-
-        const animation = element.animate(
-            [{ transform: startTransform }, { transform: endTransform }],
-            { duration: item.placement.item.duration, easing: 'linear', fill: 'forwards' },
-        );
-        item.element = element;
-        item.animation = animation;
-        item.placement.item.animation = animation;
-        animation.playbackRate = this.getCompositorPlaybackRate();
-        const mediaTime = this.getMediaTimeMilliseconds();
-        const startedMediaTime = item.placement.item.startedMediaTime;
-        if (mediaTime !== null && startedMediaTime !== null) {
-            animation.currentTime = Math.max(0, mediaTime - startedMediaTime);
-        }
-        if (this.paused || this.mediaWaiting || this.player.video.paused) animation.pause();
-        animation.onfinish = () => this.removeCanvasItem(item);
-    }
-
     private renderCanvas(now: number): void {
-        if (this.options.highRefreshRate) return;
         if (this.workerRenderer) {
             this.syncWorkerClock();
             return;
@@ -563,19 +516,21 @@ class Danmaku {
             this.canvasFramesUntilRender = 0;
             return;
         }
-        if (this.canvasFrameDivisor !== null) {
-            if (this.canvasFramesUntilRender > 0) {
-                this.canvasFramesUntilRender--;
-                return;
-            }
-            this.canvasFramesUntilRender = this.canvasFrameDivisor - 1;
-        } else {
-            if (this.nextCanvasRenderAt !== 0 && now < this.nextCanvasRenderAt) return;
-            if (this.nextCanvasRenderAt === 0) this.nextCanvasRenderAt = now + this.canvasFrameInterval;
-            else {
-                do {
-                    this.nextCanvasRenderAt += this.canvasFrameInterval;
-                } while (this.nextCanvasRenderAt <= now);
+        if (!this.options.highRefreshRate) {
+            if (this.canvasFrameDivisor !== null) {
+                if (this.canvasFramesUntilRender > 0) {
+                    this.canvasFramesUntilRender--;
+                    return;
+                }
+                this.canvasFramesUntilRender = this.canvasFrameDivisor - 1;
+            } else {
+                if (this.nextCanvasRenderAt !== 0 && now < this.nextCanvasRenderAt) return;
+                if (this.nextCanvasRenderAt === 0) this.nextCanvasRenderAt = now + this.canvasFrameInterval;
+                else {
+                    do {
+                        this.nextCanvasRenderAt += this.canvasFrameInterval;
+                    } while (this.nextCanvasRenderAt <= now);
+                }
             }
         }
         const context = this.canvasContext;
@@ -625,6 +580,7 @@ class Danmaku {
                 context.drawImage(item.bitmap, drawX, drawY, item.bitmapWidth, item.bitmapHeight);
             }
         }
+        this.webglRenderer?.endFrame();
         if (context) context.globalAlpha = 1;
     }
 
@@ -676,12 +632,6 @@ class Danmaku {
         this.canvasItems.delete(item);
         this.workerRenderer?.remove(item.workerId);
         this.webglRenderer?.deleteSprite(item.webglSprite);
-        if (item.animation) {
-            item.animation.onfinish = null;
-            item.animation.cancel();
-        }
-        item.element?.remove();
-        item.placement.item.animation = undefined;
         const lane = this.danTunnel[item.type][item.placement.lane + ''];
         if (!lane) return;
         const index = lane.indexOf(item.placement.item);
@@ -695,41 +645,6 @@ class Danmaku {
         }
     }
 
-    private getCompositorPlaybackRate(): number {
-        const playbackRate = this.player.video.playbackRate;
-        return Number.isFinite(playbackRate) && playbackRate > 0 ? playbackRate : 1;
-    }
-
-    private updateCompositorPlaybackRate(): void {
-        const playbackRate = this.getCompositorPlaybackRate();
-        for (const item of this.canvasItems) {
-            if (item.animation) item.animation.playbackRate = playbackRate;
-        }
-    }
-
-    private pauseCompositorAnimations(): void {
-        if (!this.options.highRefreshRate) return;
-        for (const item of this.canvasItems) item.animation?.pause();
-    }
-
-    private resumeCompositorAnimations(): void {
-        if (!this.options.highRefreshRate || this.paused || this.mediaWaiting || this.player.video.paused) return;
-        this.updateCompositorPlaybackRate();
-        for (const item of this.canvasItems) item.animation?.play();
-    }
-
-    private destroyCompositorItems(): void {
-        if (!this.options.highRefreshRate) return;
-        for (const item of this.canvasItems) {
-            if (item.animation) {
-                item.animation.onfinish = null;
-                item.animation.cancel();
-            }
-            item.element?.remove();
-        }
-        this.canvasItems.clear();
-    }
-
     play(): void {
         if (this.canvasPausedAt !== null) {
             const now = performance.now();
@@ -740,7 +655,6 @@ class Danmaku {
             this.canvasPausedAt = null;
         }
         this.paused = false;
-        this.resumeCompositorAnimations();
         this.syncWorkerClock(true);
     }
 
@@ -749,7 +663,6 @@ class Danmaku {
         if (this.canvasPausedAt === null) {
             this.canvasPausedAt = performance.now();
         }
-        this.pauseCompositorAnimations();
         this.syncWorkerClock(true);
     }
 
@@ -806,11 +719,6 @@ class Danmaku {
         this.danIndex = 0;
         for (const item of this.canvasItems) {
             this.webglRenderer?.deleteSprite(item.webglSprite);
-            if (item.animation) {
-                item.animation.onfinish = null;
-                item.animation.cancel();
-            }
-            item.element?.remove();
         }
         this.canvasItems.clear();
         this.canvasPausedAt = this.paused ? performance.now() : null;
@@ -821,9 +729,8 @@ class Danmaku {
     }
 
     resize(): void {
-        // Do not retarget an animation that is already in flight. Rewriting its
-        // translateX destination produces a visible horizontal jump. New comments
-        // always capture the dimensions cached by ResizeObserver before draw().
+        // Comments already in flight retain their original lane geometry. New
+        // comments use the dimensions cached by ResizeObserver before draw().
         const width = this.container.clientWidth;
         if (width !== this.containerWidth) this.measureContexts.clear();
         this.containerWidth = width;

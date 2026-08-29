@@ -7,6 +7,7 @@ interface WorkerRendererOptions {
     pixelRatio: number,
     opacity: number,
     frameTiming: WorkerFrameTiming,
+    batch: boolean,
     onExpired: (ids: number[]) => void,
     onError: (error: Error) => void,
 }
@@ -45,6 +46,7 @@ export default class WebGLDanmakuWorkerRenderer {
                 pixelRatio: options.pixelRatio,
                 opacity: options.opacity,
                 frameTiming: options.frameTiming,
+                batch: options.batch,
             }, [offscreen]);
         } catch (error) {
             this.destroy();
