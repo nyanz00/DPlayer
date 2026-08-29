@@ -5,6 +5,7 @@ import defaultApiBackend from './api';
 import * as DPlayerType from './types';
 import WebGLDanmakuRenderer, { WebGLDanmakuSprite } from './webgl-danmaku-renderer';
 import WebGLDanmakuWorkerRenderer from './webgl-danmaku-worker-renderer';
+import { WorkerDanmakuRenderStats } from './webgl-danmaku-worker-protocol';
 import { DisplayRefreshTiming, sampleDisplayRefreshFrame, subscribeDisplayRefreshTiming } from './display-refresh-rate';
 
 const DANMAKU_FRAME_INTERVAL = 1000 / 60;
@@ -97,6 +98,7 @@ class Danmaku {
     canvasFrameInterval = DANMAKU_FRAME_INTERVAL;
     canvasFramesUntilRender = 0;
     unsubscribeDisplayRefreshTiming: (() => void) | null = null;
+    renderStats: WorkerDanmakuRenderStats | null = null;
 
     constructor(options: DanmakuOptions) {
         this.options = options;
@@ -322,6 +324,9 @@ class Danmaku {
                 },
                 batch: this.options.highRefreshRate,
                 onExpired: ids => this.removeExpiredWorkerItems(ids),
+                onStats: stats => {
+                    this.renderStats = stats;
+                },
                 onError: error => this.fallbackFromWorker(error),
             });
         } catch (error) {
@@ -355,6 +360,7 @@ class Danmaku {
         console.warn('[DPlayer] Danmaku Worker failed; falling back to main-thread rendering.', error);
         this.workerRenderer.destroy();
         this.workerRenderer = null;
+        this.renderStats = null;
         const replacement = this.createCanvas();
         this.canvas.replaceWith(replacement);
         this.canvas = replacement;
@@ -386,6 +392,7 @@ class Danmaku {
 
     private clearCanvas(): void {
         if (this.workerRenderer) {
+            this.renderStats = null;
             this.workerRenderer.clear();
             return;
         }

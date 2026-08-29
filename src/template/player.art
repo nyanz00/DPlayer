@@ -298,6 +298,18 @@
         <span class="dplayer-info-panel-item-title">Page FPS</span>
         <span class="dplayer-info-panel-item-data"></span>
     </div>
+    <div class="dplayer-info-panel-item dplayer-info-panel-item-danmaku-renderer">
+        <span class="dplayer-info-panel-item-title">Danmaku Renderer</span>
+        <span class="dplayer-info-panel-item-data"></span>
+    </div>
+    <div class="dplayer-info-panel-item dplayer-info-panel-item-danmaku-raf">
+        <span class="dplayer-info-panel-item-title">Danmaku Worker rAF</span>
+        <span class="dplayer-info-panel-item-data"></span>
+    </div>
+    <div class="dplayer-info-panel-item dplayer-info-panel-item-danmaku-gpu">
+        <span class="dplayer-info-panel-item-title">Danmaku GPU Time</span>
+        <span class="dplayer-info-panel-item-data"></span>
+    </div>
     <div class="dplayer-info-panel-item dplayer-info-panel-item-dropped-frames">
         <span class="dplayer-info-panel-item-title">Dropped Frames</span>
         <span class="dplayer-info-panel-item-data"></span>

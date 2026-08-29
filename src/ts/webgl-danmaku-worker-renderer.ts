@@ -1,4 +1,4 @@
-import { WebGLDanmakuWorkerInput, WebGLDanmakuWorkerOutput, WorkerDanmakuItem, WorkerFrameTiming } from './webgl-danmaku-worker-protocol';
+import { WebGLDanmakuWorkerInput, WebGLDanmakuWorkerOutput, WorkerDanmakuItem, WorkerDanmakuRenderStats, WorkerFrameTiming } from './webgl-danmaku-worker-protocol';
 import DanmakuWorker from 'worker-loader?inline=no-fallback!./webgl-danmaku-worker';
 
 interface WorkerRendererOptions {
@@ -9,6 +9,7 @@ interface WorkerRendererOptions {
     frameTiming: WorkerFrameTiming,
     batch: boolean,
     onExpired: (ids: number[]) => void,
+    onStats: (stats: WorkerDanmakuRenderStats) => void,
     onError: (error: Error) => void,
 }
 
@@ -31,6 +32,8 @@ export default class WebGLDanmakuWorkerRenderer {
             if (event.data.type === 'expired') {
                 event.data.ids.forEach(id => this.activeIds.delete(id));
                 this.options.onExpired(event.data.ids);
+            } else if (event.data.type === 'stats') {
+                this.options.onStats(event.data.value);
             } else if (event.data.type === 'error') {
                 this.options.onError(new Error(event.data.message));
             }

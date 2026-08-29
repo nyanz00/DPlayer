@@ -52,6 +52,19 @@ class InfoPanel {
         this.template.infoResolution.textContent = `${this.player.video.videoWidth} x ${this.player.video.videoHeight}`;
         this.template.infoDuration.textContent = `${this.player.video.duration}`;
 
+        const danmakuStats = this.player.danmaku?.renderStats;
+        if (danmakuStats) {
+            this.template.infoDanmakuRenderer.textContent = `WebGL2 batch / ${danmakuStats.activeComments} comments / ${danmakuStats.drawCalls} draw calls`;
+            this.template.infoDanmakuRaf.textContent = `${danmakuStats.rafFps.toFixed(1)} fps / avg ${danmakuStats.rafIntervalAverageMs.toFixed(2)} ms / p95 ${danmakuStats.rafIntervalP95Ms.toFixed(2)} ms`;
+            this.template.infoDanmakuGpu.textContent = danmakuStats.gpuTimeMs === null
+                ? 'N/A'
+                : `${danmakuStats.gpuTimeMs.toFixed(3)} ms`;
+        } else {
+            this.template.infoDanmakuRenderer.textContent = this.player.danmaku ? 'Standard' : 'N/A';
+            this.template.infoDanmakuRaf.textContent = 'N/A';
+            this.template.infoDanmakuGpu.textContent = 'N/A';
+        }
+
         // Dropped Frames
         if (this.player.video['getVideoPlaybackQuality'] != undefined) {
             const quality = this.player.video.getVideoPlaybackQuality();

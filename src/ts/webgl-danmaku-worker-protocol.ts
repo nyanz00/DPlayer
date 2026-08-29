@@ -17,6 +17,16 @@ export interface WorkerFrameTiming {
     frameInterval: number,
 }
 
+export interface WorkerDanmakuRenderStats {
+    mode: 'webgl2-batch',
+    rafFps: number,
+    rafIntervalAverageMs: number,
+    rafIntervalP95Ms: number,
+    gpuTimeMs: number | null,
+    activeComments: number,
+    drawCalls: number,
+}
+
 export type WebGLDanmakuWorkerInput =
     | { type: 'init', canvas: OffscreenCanvas, width: number, height: number, pixelRatio: number, opacity: number, frameTiming: WorkerFrameTiming, batch: boolean }
     | { type: 'add', item: WorkerDanmakuItem, bitmap: ImageBitmap }
@@ -30,4 +40,5 @@ export type WebGLDanmakuWorkerInput =
 export type WebGLDanmakuWorkerOutput =
     | { type: 'ready' }
     | { type: 'expired', ids: number[] }
+    | { type: 'stats', value: WorkerDanmakuRenderStats }
     | { type: 'error', message: string };

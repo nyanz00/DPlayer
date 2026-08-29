@@ -6,6 +6,7 @@ interface ActiveItem extends WorkerDanmakuItem {
     sprite: WebGLDanmakuSprite,
     fallbackStartedAt: number,
     renderedElapsed: number,
+    animationStartedAt: number,
 }
 
 interface WorkerScope {
@@ -26,11 +27,16 @@ let mediaAnchorAt = 0;
 let mediaPlaying = false;
 let playbackRate = 1;
 let lastSampledMediaTime: number | null = null;
+let animationAnchor = 0;
+let animationAnchorAt = 0;
 let scheduled = false;
 let nextRenderAt = 0;
 let frameDivisor: number | null = null;
 let frameInterval = DEFAULT_FRAME_INTERVAL;
 let framesUntilRender = 0;
+let statsStartedAt = 0;
+let lastFrameCallbackAt: number | null = null;
+let frameIntervals: number[] = [];
 
 const post = (message: WebGLDanmakuWorkerOutput): void => scope.postMessage(message);
 
@@ -39,11 +45,45 @@ const estimatedMediaTime = (now: number): number | null => {
     return mediaAnchor + (mediaPlaying ? Math.max(0, now - mediaAnchorAt) * playbackRate : 0);
 };
 
+const estimatedAnimationTime = (now: number): number => animationAnchor
+    + (mediaPlaying ? Math.max(0, now - animationAnchorAt) * playbackRate : 0);
+
+const sampleFrameCallback = (now: number): void => {
+    if (lastFrameCallbackAt !== null && now > lastFrameCallbackAt) frameIntervals.push(now - lastFrameCallbackAt);
+    lastFrameCallbackAt = now;
+    if (statsStartedAt === 0) statsStartedAt = now;
+    if (now - statsStartedAt < 1000 || frameIntervals.length === 0 || !(renderer instanceof WebGL2DanmakuBatchRenderer)) return;
+    const sorted = [...frameIntervals].sort((a, b) => a - b);
+    const total = frameIntervals.reduce((sum, interval) => sum + interval, 0);
+    const frameStats = renderer.getFrameStats();
+    post({
+        type: 'stats',
+        value: {
+            mode: 'webgl2-batch',
+            rafFps: total > 0 ? frameIntervals.length * 1000 / total : 0,
+            rafIntervalAverageMs: total / frameIntervals.length,
+            rafIntervalP95Ms: sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))],
+            gpuTimeMs: frameStats.gpuTimeMs,
+            activeComments: items.size,
+            drawCalls: frameStats.drawCalls,
+        },
+    });
+    statsStartedAt = now;
+    frameIntervals = [];
+};
+
+const resetFrameSamples = (): void => {
+    statsStartedAt = 0;
+    lastFrameCallbackAt = null;
+    frameIntervals = [];
+};
+
 const scheduleFrame = (): void => {
     if (scheduled || items.size === 0) return;
     scheduled = true;
     const callback = (now: number): void => {
         scheduled = false;
+        sampleFrameCallback(now);
         const shouldRender = scope.requestAnimationFrame && frameDivisor !== null
             ? framesUntilRender === 0
             : nextRenderAt === 0 || now >= nextRenderAt;
@@ -80,6 +120,7 @@ const deleteItem = (id: number): void => {
     if (!item) return;
     renderer?.deleteSprite(item.sprite);
     items.delete(id);
+    if (items.size === 0) resetFrameSamples();
 };
 
 const expireAll = (): void => {
@@ -91,11 +132,18 @@ const expireAll = (): void => {
 
 const render = (now: number): void => {
     if (!renderer) return;
-    renderer.beginFrame(opacity);
+    const batchRenderer = renderer instanceof WebGL2DanmakuBatchRenderer ? renderer : null;
+    const animationTime = estimatedAnimationTime(now);
+    if (batchRenderer) batchRenderer.beginFrame(opacity, animationTime);
+    else renderer.beginFrame(opacity);
     const currentMediaTime = estimatedMediaTime(now);
     const expired: number[] = [];
 
     for (const item of items.values()) {
+        if (batchRenderer) {
+            if (animationTime - item.animationStartedAt >= item.duration) expired.push(item.id);
+            continue;
+        }
         const mediaElapsed = currentMediaTime !== null && item.startedMediaTime !== null
             ? currentMediaTime - item.startedMediaTime
             : null;
@@ -136,6 +184,7 @@ scope.onmessage = (event): void => {
                 : new WebGLDanmakuRenderer(message.canvas);
             pixelRatio = message.pixelRatio;
             opacity = message.opacity;
+            animationAnchorAt = performance.now();
             renderer.resize(message.width, message.height, message.pixelRatio);
             post({ type: 'ready' });
             scheduleFrame();
@@ -148,12 +197,26 @@ scope.onmessage = (event): void => {
             const sprite = renderer.createSprite(message.bitmap, message.item.width, message.item.height);
             message.bitmap.close();
             const now = performance.now();
-            items.set(message.item.id, {
+            const animationStartedAt = estimatedAnimationTime(now) - message.item.elapsed;
+            const activeItem: ActiveItem = {
                 ...message.item,
                 sprite,
                 fallbackStartedAt: now - message.item.elapsed,
                 renderedElapsed: message.item.elapsed,
-            });
+                animationStartedAt,
+            };
+            items.set(message.item.id, activeItem);
+            if (renderer instanceof WebGL2DanmakuBatchRenderer) {
+                renderer.registerSprite(sprite, {
+                    id: message.item.id,
+                    startX: message.item.startX,
+                    endX: message.item.endX,
+                    y: message.item.y,
+                    padding: message.item.padding,
+                    duration: message.item.duration,
+                    startedAt: animationStartedAt,
+                });
+            }
             scheduleFrame();
             break;
         }
@@ -178,6 +241,8 @@ scope.onmessage = (event): void => {
                 expireAll();
             }
             const now = performance.now();
+            animationAnchor = estimatedAnimationTime(now);
+            animationAnchorAt = now;
             const receivedAt = performance.timeOrigin + now;
             const playbackRateValue = Number.isFinite(message.playbackRate) && message.playbackRate > 0
                 ? message.playbackRate
@@ -198,6 +263,7 @@ scope.onmessage = (event): void => {
             renderer?.clear();
             lastSampledMediaTime = null;
             nextRenderAt = 0;
+            resetFrameSamples();
             break;
         }
     } catch (error) {

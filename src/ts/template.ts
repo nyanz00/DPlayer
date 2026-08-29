@@ -89,6 +89,9 @@ class Template {
     infoVersion!: HTMLElement;
     infoVideoFPS!: HTMLElement;
     infoPageFPS!: HTMLElement;
+    infoDanmakuRenderer!: HTMLElement;
+    infoDanmakuRaf!: HTMLElement;
+    infoDanmakuGpu!: HTMLElement;
     infoDroppedFrames!: HTMLElement;
     infoType!: HTMLElement;
     infoUrl!: HTMLElement;
@@ -206,6 +209,9 @@ class Template {
         this.infoVersion = this.container.querySelector('.dplayer-info-panel-item-version .dplayer-info-panel-item-data')!;
         this.infoVideoFPS = this.container.querySelector('.dplayer-info-panel-item-video-fps .dplayer-info-panel-item-data')!;
         this.infoPageFPS = this.container.querySelector('.dplayer-info-panel-item-page-fps .dplayer-info-panel-item-data')!;
+        this.infoDanmakuRenderer = this.container.querySelector('.dplayer-info-panel-item-danmaku-renderer .dplayer-info-panel-item-data')!;
+        this.infoDanmakuRaf = this.container.querySelector('.dplayer-info-panel-item-danmaku-raf .dplayer-info-panel-item-data')!;
+        this.infoDanmakuGpu = this.container.querySelector('.dplayer-info-panel-item-danmaku-gpu .dplayer-info-panel-item-data')!;
         this.infoDroppedFrames = this.container.querySelector('.dplayer-info-panel-item-dropped-frames .dplayer-info-panel-item-data')!;
         this.infoType = this.container.querySelector('.dplayer-info-panel-item-type .dplayer-info-panel-item-data')!;
         this.infoUrl = this.container.querySelector('.dplayer-info-panel-item-url .dplayer-info-panel-item-data')!;
