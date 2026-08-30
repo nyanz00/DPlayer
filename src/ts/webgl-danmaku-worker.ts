@@ -31,6 +31,7 @@ let lastSampledMediaTime: number | null = null;
 let animationAnchor = 0;
 let animationAnchorAt = 0;
 let scheduled = false;
+let scheduleGeneration = 0;
 let nextRenderAt = 0;
 let frameDivisor: number | null = null;
 let frameInterval = DEFAULT_FRAME_INTERVAL;
@@ -102,7 +103,9 @@ const resetFrameSamples = (): void => {
 const scheduleFrame = (): void => {
     if (scheduled || items.size === 0) return;
     scheduled = true;
+    const generation = scheduleGeneration;
     const callback = (now: number): void => {
+        if (generation !== scheduleGeneration) return;
         scheduled = false;
         sampleFrameCallback(now);
         const shouldRender = scope.requestAnimationFrame && frameDivisor !== null
@@ -128,6 +131,18 @@ const scheduleFrame = (): void => {
     };
     if (scope.requestAnimationFrame) scope.requestAnimationFrame(callback);
     else scope.setTimeout(() => callback(performance.now()), frameInterval);
+};
+
+const restartFrameSchedule = (): void => {
+    // A worker rAF scheduled before a long browser/page suspension is not
+    // guaranteed to be delivered after playback resumes. Invalidate that
+    // callback and start a fresh loop instead of leaving `scheduled` stuck.
+    scheduleGeneration++;
+    scheduled = false;
+    framesUntilRender = 0;
+    nextRenderAt = 0;
+    resetFrameSamples();
+    scheduleFrame();
 };
 
 const setFrameTiming = (timing: WorkerFrameTiming): void => {
@@ -262,6 +277,7 @@ scope.onmessage = (event): void => {
             opacity = message.value;
             break;
         case 'clock': {
+            const wasPlaying = mediaPlaying;
             if (message.mediaTime !== null
                 && lastSampledMediaTime !== null
                 && message.mediaTime < lastSampledMediaTime - 250) {
@@ -280,6 +296,7 @@ scope.onmessage = (event): void => {
             mediaPlaying = message.playing;
             playbackRate = playbackRateValue;
             lastSampledMediaTime = message.mediaTime;
+            if (mediaPlaying && !wasPlaying) restartFrameSchedule();
             break;
         }
         case 'frameTiming':
